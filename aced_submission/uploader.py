@@ -266,7 +266,7 @@ def upload_document_reference(bucket_name, document_reference_path, source_path,
     document_references_length = 0
 
     already_uploaded = set()
-    if not ignore_state:
+    if not ignore_state and state_file.exists():
         with open(state_file, "rb") as fp:
             for _ in fp.readlines():
                 state = orjson.loads(_)
