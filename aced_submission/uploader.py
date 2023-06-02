@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import base64
 import datetime
 import json
 import logging
@@ -11,6 +10,7 @@ from dataclasses import dataclass
 from itertools import islice
 from multiprocessing.pool import Pool
 from time import sleep
+from typing import Iterator
 
 import click
 import jwt
@@ -87,15 +87,11 @@ def _upload_document_reference(document_reference: dict, bucket_name: str,
         # create a record in gen3 using document_reference's id as guid, get a signed url
         # SYNC
 
-        # if document_reference['id'] == '0d1a3766-e179-5e94-8bcb-a2563542d13a':
-        #     # print('sleeping for test')
-        #     raise Exception("Simulated Failure")
-
         document = file_client.upload_file_to_guid(guid=document_reference['id'], file_name=object_name, bucket=bucket_name)
         assert 'url' in document, document
         signed_url = urllib.parse.unquote(document['url'])
-
         file_name = pathlib.Path(file_name)
+        assert file_name.exists(), f"{file_name} does not exist"
 
         _upload_file_to_signed_url(file_name, md5sum, metadata, signed_url)
 
@@ -121,11 +117,12 @@ def _upload_file_to_signed_url(file_name, md5sum, metadata, signed_url):
 
     # When you use this header, Amazon S3 checks the object against the provided MD5 value and,
     # if they do not match, returns an error.
-    content_md5 = base64.b64encode(bytes.fromhex(md5sum))
-    headers = {'Content-MD5': content_md5}
-    # attach our metadata to s3 object
-    for key, value in metadata.items():
-        headers[f"x-amz-meta-{key}"] = value
+
+    # content_md5 = base64.b64encode(bytes.fromhex(md5sum))
+    # headers = {'Content-MD5': content_md5}
+    # # attach our metadata to s3 object
+    # for key, value in metadata.items():
+    #     headers[f"x-amz-meta-{key}"] = value
 
     with open(file_name, 'rb') as fp:
         # SYNC
@@ -181,14 +178,17 @@ def _update_indexd(attachment, bucket_name, document_reference, duplicate_check,
     return metadata
 
 
-def _extract_source_path(attachment, source_path, source_path_extension):
+def _extract_source_path(attachment, source_path, source_path_extension) -> str:
     if source_path:
         source_path = pathlib.Path(source_path)
         assert source_path.is_dir(), f"Path is not a directory {source_path}"
         source_path = source_path / attachment['url'].lstrip('./').lstrip('file:///')
+        source_path = str(source_path)
     else:
-        assert len(source_path_extension) == 1, "Missing source_path extension."
-        source_path = source_path_extension[0]['valueUrl']
+        if len(source_path_extension) == 1:  # "Missing source_path extension."
+            source_path = source_path_extension[0]['valueUrl']
+        else:
+            source_path = attachment['url'].lstrip('./').lstrip('file:///')
     return source_path
 
 
@@ -213,6 +213,26 @@ def _gen3_services(credentials_file: str) -> (Gen3File, Gen3Index):
     file_client = Gen3File(endpoint, auth)
     index_client = Gen3Index(endpoint, auth)
     return file_client, index_client
+
+
+def document_reference_reader(document_reference_path) -> Iterator[dict]:
+    """Read DocumentReference.ndjson file or bundle."""
+    if 'ndjson' in document_reference_path:
+        with open(document_reference_path) as fp:
+            for _ in fp.readlines():
+                yield orjson.loads(_)
+    else:
+        document_reference_path = pathlib.Path(document_reference_path)
+        for input_file in document_reference_path.glob('*.json'):
+            with open(input_file, "rb") as fp:
+                bundle_ = orjson.loads(fp.read())
+                if 'entry' not in bundle_:
+                    print(f"No 'entry' in bundle {input_file} ")
+                    break
+            for entry in bundle_['entry']:
+                resource = entry['resource']
+                if resource['resourceType'] == 'DocumentReference':
+                    yield resource
 
 
 @files.command(name='upload')
@@ -243,7 +263,8 @@ def upload_document_reference(bucket_name, document_reference_path, source_path,
     """Upload data file associated with DocumentReference.
 
     """
-    assert pathlib.Path(document_reference_path).is_file(), f"{document_reference_path} directory does not exist"
+    _ = pathlib.Path(document_reference_path)
+    assert _.is_file() or _.is_dir(), f"{document_reference_path} directory does not exist"
 
     state_dir = pathlib.Path(state_dir).expanduser()
     state_dir.mkdir(parents=True, exist_ok=True)
@@ -272,120 +293,113 @@ def upload_document_reference(bucket_name, document_reference_path, source_path,
                 state = orjson.loads(_)
                 already_uploaded.update([_ for _ in state['completed']])
 
-    with open(document_reference_path) as fp:
-        for _ in fp.readlines():
-            _ = orjson.loads(_)
-            if _['id'] not in already_uploaded:
-                incomplete.add(_['id'])
-                document_references_size += _['content'][0]['attachment']['size']
-                document_references_length += 1
-            else:
-                if not silent:
-                    print(f"{_['id']} already uploaded, skipping", file=sys.stderr)
+    for _ in document_reference_reader(document_reference_path):
+        if _['id'] not in already_uploaded:
+            incomplete.add(_['id'])
+            document_references_size += _['content'][0]['attachment']['size']
+            document_references_length += 1
+        else:
+            if not silent:
+                print(f"{_['id']} already uploaded, skipping", file=sys.stderr)
 
     # re-open file, process it a chunk at a time
-    with open(document_reference_path + '.tmp', "wb") as output_f:
-        with Pool(processes=worker_count) as pool:
-            results = []
-            with open(document_reference_path) as fp:
-                for _ in fp.readlines():
-                    document_reference = orjson.loads(_)
-                    if document_reference['id'] in already_uploaded:
-                        continue
-                    result = pool.apply_async(
-                        func=_upload_document_reference,
-                        args=(
-                            document_reference,
-                            bucket_name,
-                            program,
-                            project,
-                            duplicate_check,
-                            credentials_file,
-                            source_path
-                        )
-                    )
-                    results.append(result)
-                    document_reference_lookup[id(result)] = document_reference['id']
+    with Pool(processes=worker_count) as pool:
+        results = []
+        for document_reference in document_reference_reader(document_reference_path):
+            if document_reference['id'] in already_uploaded:
+                continue
+            result = pool.apply_async(
+                func=_upload_document_reference,
+                args=(
+                    document_reference,
+                    bucket_name,
+                    program,
+                    project,
+                    duplicate_check,
+                    credentials_file,
+                    source_path
+                )
+            )
+            results.append(result)
+            document_reference_lookup[id(result)] = document_reference['id']
 
-            # close the process pool
-            pool.close()
+        # close the process pool
+        pool.close()
 
-            # poll the results every sec.
-            with tqdm(total=document_references_size, unit='B', disable=silent,
-                      unit_scale=True, unit_divisor=1024) as pbar:
-                while True:
-                    results_to_remove = []
-                    for record in results:
-                        if record.ready() and record.successful():
-                            r = record.get()
-                            # print(f'ready and successful {id(r)}')
-                            if r.exception:
-                                exceptions[r.document_reference['id']] = {
-                                        'exception': str(r.exception),
-                                        'document_reference': {
-                                            'id': r.document_reference
-                                        }
+        # poll the results every sec.
+        with tqdm(total=document_references_size, unit='B', disable=silent,
+                  unit_scale=True, unit_divisor=1024) as pbar:
+            while True:
+                results_to_remove = []
+                for record in results:
+                    if record.ready() and record.successful():
+                        r = record.get()
+                        # print(f'ready and successful {id(r)}')
+                        if r.exception:
+                            exceptions[r.document_reference['id']] = {
+                                    'exception': str(r.exception),
+                                    'document_reference': {
+                                        'id': r.document_reference
                                     }
-                            elif r.document_reference['id'] not in completed:
-                                completed.add(r.document_reference['id'])
-                                incomplete.remove(r.document_reference['id'])
+                                }
+                        elif r.document_reference['id'] not in completed:
+                            completed.add(r.document_reference['id'])
+                            incomplete.remove(r.document_reference['id'])
 
-                            results_to_remove.append(record)
-                            _ = orjson.dumps(r.document_reference, option=orjson.OPT_APPEND_NEWLINE)
-                            output_f.write(_)
-                            document_references_length = document_references_length - 1
-                            pbar.set_postfix(file=f"{r.document_reference['id'][-6:]}", elapsed=f"{r.elapsed}")
-                            pbar.update(r.document_reference['content'][0]['attachment']['size'])
-                            sleep(.1)  # give screen a chance to refresh
+                        results_to_remove.append(record)
+                        document_references_length = document_references_length - 1
+                        pbar.set_postfix(file=f"{r.document_reference['id'][-6:]}", elapsed=f"{r.elapsed}")
+                        pbar.update(r.document_reference['content'][0]['attachment']['size'])
+                        sleep(.1)  # give screen a chance to refresh
 
-                        if record.ready() and not record.successful():
-                            print('record.ready() and not record.successful()')
-                            # capture exception, we shouldn't get here as all exception should be caught
-                            document_reference_id = document_reference_lookup[id(record)]
-                            try:
-                                record.get()
-                            except Exception as e:  # noqa
-                                if document_reference_id not in exceptions:
-                                    exceptions[document_reference_id] = {
-                                        'exception': str(e),
-                                        'document_reference': {
-                                            'id': document_reference_id
-                                        }
+                    if record.ready() and not record.successful():
+                        print('record.ready() and not record.successful()')
+                        # capture exception, we shouldn't get here as all exception should be caught
+                        document_reference_id = document_reference_lookup[id(record)]
+                        try:
+                            record.get()
+                        except Exception as e:  # noqa
+                            if document_reference_id not in exceptions:
+                                exceptions[document_reference_id] = {
+                                    'exception': str(e),
+                                    'document_reference': {
+                                        'id': document_reference_id
                                     }
-                                    document_references_length = document_references_length - 1
-                                    # print('not successful', document_references_length, e)
+                                }
+                                document_references_length = document_references_length - 1
+                                # print('not successful', document_references_length, e)
 
-                    if document_references_length == 0:
-                        break
+                if document_references_length == 0:
+                    break
 
-                    # print(f'sleeping(1) document_references_length: {document_references_length}')
-                    sleep(1)
+                # print(f'sleeping(1) document_references_length: {document_references_length}')
+                sleep(1)
 
-                    # using list comprehension to cull processed results
-                    results = [_ for _ in results if _ not in results_to_remove]
+                # using list comprehension to cull processed results
+                results = [_ for _ in results if _ not in results_to_remove]
 
-            with open(state_file, "a+b") as fp:
-                fp.write(orjson.dumps(
-                        {
-                            'timestamp': datetime.datetime.now().isoformat(),
-                            'completed': [_ for _ in completed],
-                            'incomplete': [_ for _ in incomplete],
-                            'exceptions': exceptions
-                        },
-                        option=orjson.OPT_APPEND_NEWLINE
-                    ))
+        with open(state_file, "a+b") as fp:
+            fp.write(orjson.dumps(
+                    {
+                        'timestamp': datetime.datetime.now().isoformat(),
+                        'completed': [_ for _ in completed],
+                        'incomplete': [_ for _ in incomplete],
+                        'exceptions': exceptions
+                    },
+                    option=orjson.OPT_APPEND_NEWLINE
+                ))
 
+        if not silent:
+            print(f"Wrote state to {state_file}", file=sys.stderr)
+        if len(incomplete) == 0:
             if not silent:
-                print(f"Wrote state to {state_file}", file=sys.stderr)
-            if len(incomplete) == 0:
-                if not silent:
-                    print('OK', file=sys.stderr)
-                exit(0)
-            else:
-                if not silent:
-                    print('Incomplete transfers:', [_ for _ in incomplete], file=sys.stderr)
-                    print('Errors:', [f"{_}: {exceptions[_]['exception']}" for _ in exceptions], file=sys.stderr)
-                exit(1)
+                print('OK', file=sys.stderr)
+            exit(0)
+        else:
+            if not silent:
+                print('Incomplete transfers:', [_ for _ in incomplete], file=sys.stderr)
+                print('Errors:', [f"{_}: {exceptions[_]['exception']}" for _ in exceptions], file=sys.stderr)
+            exit(1)
 
 
 if __name__ == '__main__':
