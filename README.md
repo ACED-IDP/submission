@@ -14,10 +14,17 @@ pip install -e .
 
 ## Use
 
+### Upload files
 ```
-TODO ---
+study=Alcoholism
+aced_submission files upload  --program aced --project $study --bucket_name $study'_BUCKET' --document_reference_path studies/$study
 ```
 
+### Upload metadata
+```commandline
+aced_submission meta upload  --program aced --project Alcoholism $Alcoholism_BUCKET --document_reference_path studies/Alcoholism
+
+```
 
 ## Test
 
