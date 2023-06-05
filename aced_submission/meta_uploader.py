@@ -218,9 +218,9 @@ def meta_upload(source_path, program, project, credentials_file, silent, diction
     assert len(files) > 0, f"No files found at {input_path}/{file_name_pattern}"
 
     # check the mappings
-    dictionary_path = dictionary_path if 'http' not in dictionary_path else None
+    dictionary_dir = dictionary_path if 'http' not in dictionary_path else None
     dictionary_url = dictionary_path if 'http' in dictionary_path else None
-    mappings = [mapping for mapping in _table_mappings(dictionary_path, dictionary_url)]
+    mappings = [mapping for mapping in _table_mappings(dictionary_dir, dictionary_url)]
 
     # load the files
     logger.info("Loading vertices")
