@@ -162,7 +162,7 @@ def load_edges(files, connection, dependency_order, mapping, project_node_id):
         connection.commit()
 
 
-def meta_upload(source_path, program, project, credentials_file, silent, config_path, file_name_pattern='**/*.ndjson'):
+def meta_upload(source_path, program, project, credentials_file, silent, dictionary_path, config_path, file_name_pattern='**/*.ndjson'):
     """Copy simplified json into Gen3."""
     assert pathlib.Path(source_path).is_dir(), f"{source_path} should be a directory"
     assert pathlib.Path(config_path).is_file(), f"{config_path} should be a file"
@@ -202,6 +202,8 @@ def meta_upload(source_path, program, project, credentials_file, silent, config_
     assert len(files) > 0, f"No files found at {input_path}/{file_name_pattern}"
 
     # check the mappings
+    dictionary_path = dictionary_path if 'http' not in dictionary_path else None
+    dictionary_url = dictionary_path if 'http' in dictionary_path else None
     mappings = [mapping for mapping in _table_mappings(dictionary_path, dictionary_url)]
 
     # load the files

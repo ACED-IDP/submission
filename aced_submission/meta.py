@@ -63,13 +63,17 @@ def graph():
               help='API credentials file downloaded from gen3 profile.')
 @click.option('--silent', default=False, is_flag=True, show_default=True,
               help="No progress bar, or other output")
+@click.option('--dictionary_path',
+              default=None,  # 'output/gen3',
+              show_default=True,
+              help='Path to data dictionary (path or url).')
 @click.option('--config_path',
               default='config.yaml',
               show_default=True,
               help='Path to config file.')
-def upload_document_reference(source_path, program, project, credentials_file, silent, config_path):
+def upload_document_reference(source_path, program, project, credentials_file, silent, dictionary_path, config_path):
     """Copy simplified json into Gen3."""
-    meta_upload(source_path, program, project, credentials_file, silent, config_path)
+    meta_upload(source_path, program, project, credentials_file, silent, dictionary_path, config_path)
 
 
 if __name__ == '__main__':
