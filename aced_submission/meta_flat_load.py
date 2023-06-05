@@ -5,6 +5,7 @@
 import csv
 import json
 import logging
+import os
 import pathlib
 import sqlite3
 import uuid
@@ -27,6 +28,11 @@ logging.getLogger('elasticsearch').setLevel(logging.WARNING)
 
 
 DEFAULT_ELASTIC = "http://localhost:9200"
+
+k8s_elastic = os.environ.get('ELASTICSEARCH_PORT', None)
+if k8s_elastic:
+    DEFAULT_ELASTIC = f"http://{k8s_elastic.replace('tcp://', '')}"
+
 DEFAULT_NAMESPACE = "gen3.aced.io"
 
 ACED_NAMESPACE = uuid.uuid3(uuid.NAMESPACE_DNS, 'aced-ipd.org')
@@ -57,9 +63,9 @@ def create_index_from_source(_schema, _index, _type):
     mappings = {}
     if _type == 'file':
         # TODO fix me - we should have a index called document_reference not file
-        properties = _schema['document_reference']['properties']
+        properties = _schema['document_reference.yaml']['properties']
     else:
-        properties = _schema[_type]['properties']
+        properties = _schema[_type + '.yaml']['properties']
     for k, v in properties.items():
         if '$ref' in v:
             (ref_, ref_prop) = v['$ref'].split('#/')
@@ -495,7 +501,7 @@ def _denormalize_patient(input_path):
               show_default=True,
               help='Path to flattened json'
               )
-@click.option('--elastic_url', default=DEFAULT_ELASTIC)
+@click.option('--elastic_url', default=DEFAULT_ELASTIC, show_default=True)
 @click.option('--limit',
               default=None,
               show_default=True,
@@ -531,7 +537,7 @@ def load_flat(project_id, index, path, limit, elastic_url, schema_path, output_p
         doc_type = 'patient'
         index = f"{DEFAULT_NAMESPACE}_{doc_type}_0"
         alias = 'patient'
-        field_array = [k for k, v in schema['patient']['properties'].items() if 'array' in v.get('type', {})]
+        field_array = [k for k, v in schema['patient.yaml']['properties'].items() if 'array' in v.get('type', {})]
 
         if not output_path:
             # create the index and write data into it.
@@ -548,7 +554,7 @@ def load_flat(project_id, index, path, limit, elastic_url, schema_path, output_p
         doc_type = 'observation'
         index = f"{DEFAULT_NAMESPACE}_{doc_type}_0"
         alias = 'observation'
-        field_array = [k for k, v in schema['observation']['properties'].items() if 'array' in v.get('type', {})]
+        field_array = [k for k, v in schema['observation.yaml']['properties'].items() if 'array' in v.get('type', {})]
         # field_array = ['data_format', 'data_type', '_file_id', 'medications', 'conditions']
 
         if not output_path:
@@ -567,7 +573,7 @@ def load_flat(project_id, index, path, limit, elastic_url, schema_path, output_p
         alias = 'file'
         index = f"{DEFAULT_NAMESPACE}_{doc_type}_0"
 
-        field_array = [k for k, v in schema['document_reference']['properties'].items() if 'array' in v.get('type',
+        field_array = [k for k, v in schema['document_reference.yaml']['properties'].items() if 'array' in v.get('type',
                                                                                                             {})]
         if not output_path:
             # create the index and write data into it.
