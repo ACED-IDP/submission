@@ -31,4 +31,5 @@ psycopg2-binary
 elasticsearch<7.14.0
 
 # gdc
-dictionaryutils~=3.4.4
+dictionaryutils
+gen3datamodel<3.0.2

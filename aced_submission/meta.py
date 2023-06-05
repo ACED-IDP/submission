@@ -1,4 +1,3 @@
-import pathlib
 import threading
 import uuid
 
@@ -7,7 +6,9 @@ from fhir.resources import FHIRAbstractModel  # noqa
 
 from aced_submission import NaturalOrderGroup
 from aced_submission.dir_to_study.transform import cli as dir_to_study
-from aced_submission.meta_uploader import meta_upload
+from aced_submission.meta_graph_load import meta_upload
+
+from aced_submission.meta_flat_load import cli as meta_flat_load_cli
 
 LINKS = threading.local()
 CLASSES = threading.local()
@@ -23,27 +24,6 @@ def meta():
 
 
 meta.add_command(dir_to_study)
-
-
-@meta.command(name='schema-publish')
-@click.argument('dictionary_path', default='iceberg/schemas/gen3/aced.json')
-@click.option('--bucket', default="s3://aced-public", help="Bucket target", show_default=True)
-@click.option('--production', default=False, is_flag=True, show_default=True,
-              help="Write to aced.json, otherwise aced-test.json")
-def schema_publish(dictionary_path, bucket, production):
-    """Copy dictionary to s3 (note:aws cli dependency)"""
-
-    dictionary_path = pathlib.Path(dictionary_path)
-    assert dictionary_path.is_file(), f"{dictionary_path} should be a path"
-    click.echo(f"Writing schema into {bucket}")
-    import subprocess
-    if production:
-        cmd = f"aws s3 cp {dictionary_path} {bucket}".split(' ')
-    else:
-        cmd = f"aws s3 cp {dictionary_path} {bucket}/aced-test.json".split(' ')
-    s3_cp = subprocess.run(cmd)
-    assert s3_cp.returncode == 0, s3_cp
-    print("OK")
 
 
 @meta.group(name='graph')
@@ -76,6 +56,8 @@ def upload_document_reference(source_path, program, project, credentials_file, s
     meta_upload(source_path, program, project, credentials_file, silent, dictionary_path, config_path,
                 file_name_pattern='**/*.ndjson')
 
+
+meta.add_command(meta_flat_load_cli)
 
 if __name__ == '__main__':
     meta()

@@ -400,15 +400,9 @@ def setup_aliases(alias, doc_type, elastic, field_array, index):
     )
 
 
-@click.group('cli')
+@click.group('flat')
 def cli():
-    """Manage Gen3 Loads."""
-    pass
-
-
-@cli.group('load')
-def load():
-    """Load Gen3 databases."""
+    """Load flat indexes into elasticsearch."""
     pass
 
 
@@ -485,7 +479,7 @@ def _denormalize_patient(input_path):
         connection.execute('CREATE INDEX if not exists family_history_patient_id on condition(patient_id)')
 
 
-@load.command('flat')
+@cli.command('load')
 @click.option('--project_id', required=True,
               default=None,
               show_default=True,
@@ -517,7 +511,8 @@ def _denormalize_patient(input_path):
               help='Do not load elastic, write flat model to file instead'
               )
 def load_flat(project_id, index, path, limit, elastic_url, schema_path, output_path):
-    """Gen3 elastic search (guppy)."""
+    """Gen3 Elastic Search data into guppy (patient, observation, files, etc.)."""
+
     # replaces tube_lite
 
     if limit:
