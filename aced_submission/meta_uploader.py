@@ -2,12 +2,12 @@ import logging
 import pathlib
 
 import yaml
+from dictionaryutils import DataDictionary, dictionary
 from yaml import SafeLoader
 
 import psycopg2
 import json
 
-from aced_submission.load import _init_dictionary
 from aced_submission.pelican import DataDictionaryTraversal
 
 logging.basicConfig(level=logging.INFO)
@@ -18,6 +18,17 @@ logging.getLogger('elasticsearch').setLevel(logging.WARNING)
 def _connect_to_postgres():
     """Connect to postgres based on environmental variables."""
     return psycopg2.connect('')
+
+
+def _init_dictionary(root_dir_=None, dictionary_url=None):
+    """Initialize gen3 data dictionary from either directory or url"""
+    d = DataDictionary(root_dir=root_dir_, url=dictionary_url)
+    dictionary.init(d)
+    # the gdcdatamodel expects dictionary initiated on load, so this can't be
+    # imported on module level
+    from gdcdatamodel import models as md
+
+    return d, md
 
 
 def _table_mappings(dictionary_path, dictionary_url):

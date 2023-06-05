@@ -26,3 +26,6 @@ beautifulsoup4
 
 # postgres
 psycopg2-binary
+
+# AWS version of ES curl http://$ELASTICSEARCH_SERVICE_HOST:$ELASTICSEARCH_SERVICE_PORT
+elasticsearch<7.14.0
