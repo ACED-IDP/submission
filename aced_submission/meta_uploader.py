@@ -180,6 +180,7 @@ def meta_upload(source_path, program, project, credentials_file, silent, diction
     """Copy simplified json into Gen3."""
     assert pathlib.Path(source_path).is_dir(), f"{source_path} should be a directory"
     assert pathlib.Path(config_path).is_file(), f"{config_path} should be a file"
+    assert dictionary_path, f"{dictionary_path} cannot be empty"
 
     config_path = pathlib.Path(config_path)
     assert config_path.is_file()
