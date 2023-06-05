@@ -1,6 +1,12 @@
+import io
 import logging
 import pathlib
+from collections import defaultdict
+from datetime import datetime
+from itertools import islice
+from typing import List
 
+import inflection
 import yaml
 from dictionaryutils import DataDictionary, dictionary
 from yaml import SafeLoader
@@ -13,6 +19,8 @@ from aced_submission.pelican import DataDictionaryTraversal
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 logging.getLogger('elasticsearch').setLevel(logging.WARNING)
+
+LOGGED_ALREADY = []
 
 
 def _connect_to_postgres():
@@ -52,6 +60,12 @@ def _table_mappings(dictionary_path, dictionary_url):
 
     mapping = _transform(ddt)
     return mapping
+
+
+def chunk(arr_range, arr_size):
+    """Iterate in chunks."""
+    arr_range = iter(arr_range)
+    return iter(lambda: tuple(islice(arr_range, arr_size)), ())
 
 
 def load_vertices(files, connection, dependency_order, project_id, mapping):
@@ -190,6 +204,7 @@ def meta_upload(source_path, program, project, credentials_file, silent, diction
     cur.execute("select node_id, _props from \"node_project\";")
     projects = cur.fetchall()
     projects = [{'node_id': p[0], '_props': p[1]} for p in projects]
+    project_code = project
     project_node_id = next(iter([p['node_id'] for p in projects if p['_props']['code'] == project_code]), None)
     assert project_node_id, f"{project} not found in node_project"
     project_id = f"{program}-{project}"

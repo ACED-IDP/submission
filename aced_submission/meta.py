@@ -73,7 +73,8 @@ def graph():
               help='Path to config file.')
 def upload_document_reference(source_path, program, project, credentials_file, silent, dictionary_path, config_path):
     """Copy simplified json into Gen3."""
-    meta_upload(source_path, program, project, credentials_file, silent, dictionary_path, config_path)
+    meta_upload(source_path, program, project, credentials_file, silent, dictionary_path, config_path,
+                file_name_pattern='**/*.ndjson')
 
 
 if __name__ == '__main__':
