@@ -67,6 +67,8 @@ def create_index_from_source(_schema, _index, _type):
     else:
         properties = _schema[_type + '.yaml']['properties']
     for k, v in properties.items():
+        if not isinstance(v, dict):
+            continue
         if '$ref' in v:
             (ref_, ref_prop) = v['$ref'].split('#/')
             prop_type = _schema[ref_][ref_prop]['type']
@@ -572,8 +574,7 @@ def load_flat(project_id, index, path, limit, elastic_url, schema_path, output_p
         doc_type = 'file'
         alias = 'file'
         index = f"{DEFAULT_NAMESPACE}_{doc_type}_0"
-
-        field_array = [k for k, v in schema['document_reference.yaml']['properties'].items() if 'array' in v.get('type',
+        field_array = [k for k, v in schema['document_reference.yaml']['properties'].items() if isinstance(v, dict) and 'array' in v.get('type',
                                                                                                             {})]
         if not output_path:
             # create the index and write data into it.

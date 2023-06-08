@@ -200,8 +200,8 @@ def meta_upload(source_path, program, project, credentials_file, silent, diction
     cur.execute("select node_id, _props from \"node_program\";")
     programs = cur.fetchall()
     programs = [{'node_id': p[0], '_props': p[1]} for p in programs]
-    program = next(iter([p for p in programs if p['_props']['name'] == program]), None)
-    assert program, f"{program} not found in node_program table"
+    _ = next(iter([p for p in programs if p['_props']['name'] == program]), None)
+    assert _, f"{program} not found in node_program table"
     cur.execute("select node_id, _props from \"node_project\";")
     projects = cur.fetchall()
     projects = [{'node_id': p[0], '_props': p[1]} for p in projects]
