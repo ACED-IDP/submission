@@ -6,7 +6,6 @@ from datetime import datetime
 from itertools import islice
 from typing import List
 
-import inflection
 import yaml
 from dictionaryutils import DataDictionary, dictionary
 from yaml import SafeLoader
@@ -141,7 +140,7 @@ def load_edges(files, connection, dependency_order, mapping, project_node_id):
                         for relation in relations:
 
                             # entity_name_underscore = inflection.underscore(entity_name)
-                            dst_name_camel = inflection.camelize(relation['dst_name'])
+                            # dst_name_camel = inflection.camelize(relation['dst_name'])
 
                             edge_table_mapping = next(
                                 iter(

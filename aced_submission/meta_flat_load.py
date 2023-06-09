@@ -26,7 +26,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 logging.getLogger('elasticsearch').setLevel(logging.WARNING)
 
-
 DEFAULT_ELASTIC = "http://localhost:9200"
 
 k8s_elastic = os.environ.get('ELASTICSEARCH_PORT', None)
@@ -117,6 +116,8 @@ def create_index_from_source(_schema, _index, _type):
             mappings['condition_code'] = {"type": "keyword"}
             mappings['family_history_condition'] = {"type": "keyword"}
             mappings['family_history_condition_code'] = {"type": "keyword"}
+
+    mappings['auth_resource_path'] = {"type": "keyword"}
 
     return {
         # https://www.elastic.co/guide/en/elasticsearch/reference/current/dynamic.html#dynamic-parameters
@@ -294,7 +295,7 @@ def observation_generator(project_id, path) -> Iterator[Dict]:
         yield o_
 
 
-@lru_cache(maxsize=1024*10)
+@lru_cache(maxsize=1024 * 10)
 def fetch_denormalized_patient(connection, patient_id):
     """Retrieve unique conditions and family history"""
 
@@ -475,13 +476,16 @@ def _denormalize_patient(input_path):
         connection.execute('CREATE TABLE if not exists condition (id PRIMARY KEY, patient_id Text, entity Text)')
     with connection:
         connection.executemany('insert into patient values (?, ?)',
-                               [(entity['id'], orjson.dumps(entity).decode(),) for entity in _load_vertex('Patient.ndjson')])
+                               [(entity['id'], orjson.dumps(entity).decode(),) for entity in
+                                _load_vertex('Patient.ndjson')])
     with connection:
         connection.executemany('insert into family_history values (?, ?, ?)',
-                               [(entity['id'], entity['patient_id'], orjson.dumps(entity).decode(),) for entity in _load_vertex('FamilyMemberHistory.ndjson')])
+                               [(entity['id'], entity['patient_id'], orjson.dumps(entity).decode(),) for entity in
+                                _load_vertex('FamilyMemberHistory.ndjson')])
     with connection:
         connection.executemany('insert into condition values (?, ?, ?)',
-                               [(entity['id'], entity['patient_id'], orjson.dumps(entity).decode(),) for entity in _load_vertex('Condition.ndjson')])
+                               [(entity['id'], entity['patient_id'], orjson.dumps(entity).decode(),) for entity in
+                                _load_vertex('Condition.ndjson')])
     with connection:
         connection.execute('CREATE INDEX if not exists condition_patient_id on condition(patient_id)')
         connection.execute('CREATE INDEX if not exists family_history_patient_id on condition(patient_id)')
@@ -574,8 +578,9 @@ def load_flat(project_id, index, path, limit, elastic_url, schema_path, output_p
         doc_type = 'file'
         alias = 'file'
         index = f"{DEFAULT_NAMESPACE}_{doc_type}_0"
-        field_array = [k for k, v in schema['document_reference.yaml']['properties'].items() if isinstance(v, dict) and 'array' in v.get('type',
-                                                                                                            {})]
+        field_array = [k for k, v in schema['document_reference.yaml']['properties'].items() if
+                       isinstance(v, dict) and 'array' in v.get('type',
+                                                                {})]
         if not output_path:
             # create the index and write data into it.
             write_bulk_http(elastic=elastic, index=index, doc_type=doc_type, limit=limit,
