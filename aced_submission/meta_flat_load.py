@@ -32,7 +32,8 @@ k8s_elastic = os.environ.get('ELASTICSEARCH_PORT', None)
 if k8s_elastic:
     DEFAULT_ELASTIC = f"http://{k8s_elastic.replace('tcp://', '')}"
 
-DEFAULT_NAMESPACE = "gen3.aced.io"
+# TODO - fix me should be gen3.aced-idp.org but we need to coordinate with gitops.json
+ES_INDEX_PREFIX = "gen3.aced.io"
 
 ACED_NAMESPACE = uuid.uuid3(uuid.NAMESPACE_DNS, 'aced-ipd.org')
 
@@ -119,13 +120,24 @@ def create_index_from_source(_schema, _index, _type):
 
     mappings['auth_resource_path'] = {"type": "keyword"}
 
+    dynamic_templates = [
+        {
+            "strings": {
+                "match_mapping_type": "string",
+                "mapping": {
+                    "type": "keyword"
+                }
+            }
+        }
+    ]
+
     return {
         # https://www.elastic.co/guide/en/elasticsearch/reference/current/dynamic.html#dynamic-parameters
-        "mappings": {_type: {"properties": mappings}}
+        "mappings": {_type: {"properties": mappings, 'dynamic_templates': dynamic_templates}}
     }
 
 
-def write_array_aliases(doc_type, alias, elastic=DEFAULT_ELASTIC, name_space=DEFAULT_NAMESPACE):
+def write_array_aliases(doc_type, alias, elastic=DEFAULT_ELASTIC, name_space=ES_INDEX_PREFIX):
     """Write the array aliases."""
     # EXPECTED_ALIASES = {
     #     ".kibana_1": {
@@ -173,7 +185,7 @@ def write_array_aliases(doc_type, alias, elastic=DEFAULT_ELASTIC, name_space=DEF
     }
 
 
-def write_array_config(doc_type, alias, field_array, elastic=DEFAULT_ELASTIC, name_space=DEFAULT_NAMESPACE):
+def write_array_config(doc_type, alias, field_array, elastic=DEFAULT_ELASTIC, name_space=ES_INDEX_PREFIX):
     """Write the array config."""
     return {
         "method": 'PUT',
@@ -182,7 +194,7 @@ def write_array_config(doc_type, alias, field_array, elastic=DEFAULT_ELASTIC, na
     }
 
 
-def write_alias_config(doc_type, alias, elastic=DEFAULT_ELASTIC, name_space=DEFAULT_NAMESPACE):
+def write_alias_config(doc_type, alias, elastic=DEFAULT_ELASTIC, name_space=ES_INDEX_PREFIX):
     """Write the alias config."""
     return {
         "method": 'POST',
@@ -374,7 +386,7 @@ def setup_aliases(alias, doc_type, elastic, field_array, index):
     elastic.indices.put_alias(index, alias)
     # create a configuration index that guppy will read that describes the array fields
     # TODO - find a doc or code reference in guppy that explains how this is used
-    alias_index = f'{DEFAULT_NAMESPACE}_{doc_type}-array-config_0'
+    alias_index = f'{ES_INDEX_PREFIX}_{doc_type}-array-config_0'
     try:
         mapping = {
             "mappings": {
@@ -397,13 +409,13 @@ def setup_aliases(alias, doc_type, elastic, field_array, index):
     except elasticsearch.exceptions.ConflictError:
         pass
     elastic.indices.update_aliases(
-        {"actions": [{"add": {"index": f"{DEFAULT_NAMESPACE}_{doc_type}_0", "alias": alias}}]}
+        {"actions": [{"add": {"index": f"{ES_INDEX_PREFIX}_{doc_type}_0", "alias": alias}}]}
     )
     elastic.indices.update_aliases({
         "actions": [
-            {"add": {"index": f"{DEFAULT_NAMESPACE}_{doc_type}-array-config_0",
-                     "alias": f"{DEFAULT_NAMESPACE}_array-config"}},
-            {"add": {"index": f"{DEFAULT_NAMESPACE}_{doc_type}-array-config_0",
+            {"add": {"index": f"{ES_INDEX_PREFIX}_{doc_type}-array-config_0",
+                     "alias": f"{ES_INDEX_PREFIX}_array-config"}},
+            {"add": {"index": f"{ES_INDEX_PREFIX}_{doc_type}-array-config_0",
                      "alias": f"{doc_type}_array-config"}}
         ]}
     )
@@ -541,7 +553,7 @@ def load_flat(project_id, index, path, limit, elastic_url, schema_path, output_p
 
     if index == 'patient':
         doc_type = 'patient'
-        index = f"{DEFAULT_NAMESPACE}_{doc_type}_0"
+        index = f"{ES_INDEX_PREFIX}_{doc_type}_0"
         alias = 'patient'
         field_array = [k for k, v in schema['patient.yaml']['properties'].items() if 'array' in v.get('type', {})]
 
@@ -558,7 +570,7 @@ def load_flat(project_id, index, path, limit, elastic_url, schema_path, output_p
 
     if index == 'observation':
         doc_type = 'observation'
-        index = f"{DEFAULT_NAMESPACE}_{doc_type}_0"
+        index = f"{ES_INDEX_PREFIX}_{doc_type}_0"
         alias = 'observation'
         field_array = [k for k, v in schema['observation.yaml']['properties'].items() if 'array' in v.get('type', {})]
         # field_array = ['data_format', 'data_type', '_file_id', 'medications', 'conditions']
@@ -577,7 +589,7 @@ def load_flat(project_id, index, path, limit, elastic_url, schema_path, output_p
     if index == 'file':
         doc_type = 'file'
         alias = 'file'
-        index = f"{DEFAULT_NAMESPACE}_{doc_type}_0"
+        index = f"{ES_INDEX_PREFIX}_{doc_type}_0"
         field_array = [k for k, v in schema['document_reference.yaml']['properties'].items() if
                        isinstance(v, dict) and 'array' in v.get('type',
                                                                 {})]
