@@ -9,6 +9,7 @@ from aced_submission.dir_to_study.transform import cli as dir_to_study
 from aced_submission.meta_graph_load import meta_upload
 
 from aced_submission.meta_flat_load import cli as meta_flat_load_cli
+from aced_submission.meta_discovery_load import discovery_load
 
 LINKS = threading.local()
 CLASSES = threading.local()
@@ -51,13 +52,30 @@ def graph():
               default='config.yaml',
               show_default=True,
               help='Path to config file.')
-def upload_document_reference(source_path, program, project, credentials_file, silent, dictionary_path, config_path):
+def _meta_upload(source_path, program, project, credentials_file, silent, dictionary_path, config_path):
     """Copy simplified json into Gen3."""
     meta_upload(source_path, program, project, credentials_file, silent, dictionary_path, config_path,
                 file_name_pattern='**/*.ndjson')
 
 
 meta.add_command(meta_flat_load_cli)
+
+
+@meta.group(name='discovery')
+def discovery():
+    """Gen3 discovery database."""
+    pass
+
+
+@discovery.command('load')
+@click.option('--program', default="aced", show_default=True,
+              help='Gen3 "program"')
+@click.option('--credentials_file', default='~/.gen3/credentials.json', show_default=True,
+              help='API credentials file downloaded from gen3 profile.')
+def discovery(program, credentials_file):
+    """Writes project information to discovery metadata-service"""
+    discovery_load(program, credentials_file)
+
 
 if __name__ == '__main__':
     meta()
