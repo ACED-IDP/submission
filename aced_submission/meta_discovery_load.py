@@ -68,6 +68,7 @@ Prostate_Cancer~35488~Patients from 'Coherent Data Set' https://www.mdpi.com/207
 
         gen3_discovery['commons'] = "ACED"
         gen3_discovery['commons_name'] = "ACED Commons"
+        # TODO - read this value for commons_url from some other, more dynamic source
         gen3_discovery['commons_url'] = 'staging.aced-idp.org'
         gen3_discovery['__manifest'] = 0
         gen3_discovery['_research_subject_count'] = int(_subjects_count)
