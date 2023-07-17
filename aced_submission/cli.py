@@ -32,9 +32,10 @@ def schema_publish(dictionary_path, bucket, production):
     dictionary_path = pathlib.Path(dictionary_path)
     assert dictionary_path.is_file(), f"{dictionary_path} should be a path"
     click.echo(f"Writing schema into {bucket}")
+    dictionary_path.is_file()
     import subprocess
     if production:
-        cmd = f"aws s3 cp {dictionary_path} {bucket}".split(' ')
+        cmd = f"aws s3 cp {dictionary_path} {bucket}/aced.json".split(' ')
     else:
         cmd = f"aws s3 cp {dictionary_path} {bucket}/aced-test.json".split(' ')
     s3_cp = subprocess.run(cmd)
