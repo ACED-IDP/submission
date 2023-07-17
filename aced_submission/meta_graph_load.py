@@ -132,6 +132,7 @@ def load_edges(files, connection, dependency_order, mapping, project_node_id):
                         if d_['name'] == 'ResearchStudy':
                             # link the ResearchStudy to the gen3 project
                             relations.append({"dst_id": project_node_id, "dst_name": "Project", "label": "project"})
+                            logger.info(f"adding project relation from project({project_node_id}) to research_study{d_['id']} {d_['code']}")
 
                         if len(relations) == 0:
                             continue
