@@ -162,9 +162,9 @@ def _graph_rm(config_path, project_id, output_format):
             for rank, _ in reverse_dependency_order:
                 if _.startswith('_'):
                     continue
-                curs.execute(f"delete from 'node_{_.lower()}' where _props->>'project_id' = ?", (project_id,))
+                curs.execute(f"delete from node_{_.lower()} where _props->>'project_id' = %s;", (project_id,))
                 results.append({'table': f'node_{_.lower()}', 'project_id': project_id, 'count': curs.rowcount})
-            curs.execute(f"delete from 'node_project' where _props->>'code' = ?", (project,))
+            curs.execute(f"delete from node_project where _props->>'code' = %s;", (project,))
             results.append({'table': f'node_project', 'project_id': project, 'count': curs.rowcount})
 
     if output_format == 'yaml':
