@@ -36,10 +36,8 @@ def graph():
 @graph.command(name='upload')
 @click.option('--source_path', required=False, default=None, show_default=True,
               help='Path on local file system')
-@click.option('--program', required=True, show_default=True,
-              help='Gen3 program')
-@click.option('--project', required=True, show_default=True,
-              help='Gen3 project')
+@click.option('--project_id', required=True, show_default=True,
+              help='Gen3 program-project')
 @click.option('--credentials_file', default='~/.gen3/credentials.json', show_default=True,
               help='API credentials file downloaded from gen3 profile.')
 @click.option('--silent', default=False, is_flag=True, show_default=True,
@@ -52,8 +50,12 @@ def graph():
               default='config.yaml',
               show_default=True,
               help='Path to config file.')
-def _meta_upload(source_path, program, project, credentials_file, silent, dictionary_path, config_path):
-    """Copy simplified json into Gen3."""
+def _meta_upload(source_path, project_id, credentials_file, silent, dictionary_path, config_path):
+    """Copy simplified json into sheepdog database."""
+    program, project = project_id.split('-')
+    assert program, "program is required"
+    assert project, "project is required"
+
     meta_upload(source_path, program, project, credentials_file, silent, dictionary_path, config_path,
                 file_name_pattern='**/*.ndjson')
 
@@ -122,6 +124,53 @@ def _node_counts(config_path, output_format):
         yaml.dump(counts, sys.stdout, default_flow_style=False)
     else:
         json.dump(counts, sys.stdout, indent=2)
+
+
+@graph.command(name='rm')
+@click.option('--config_path',
+              default='config.yaml',
+              show_default=True,
+              help='Path to config file.')
+@click.option('--project_id', required=True,
+              default=None,
+              show_default=True,
+              help='program-project'
+              )
+@click.option('--format', 'output_format',
+              default='yaml',
+              show_default=True,
+              type=click.Choice(['yaml', 'json'], case_sensitive=False),
+              )
+def _graph_rm(config_path, project_id, output_format):
+    """Remove records from the sheepdog database by project."""
+    assert config_path, '--config_path is required'
+    assert pathlib.Path(config_path).exists(), f'--config_path {config_path} does not exist'
+
+    program, project = project_id.split('-')
+    assert program, "program is required"
+    assert project, "project is required"
+
+    reverse_dependency_order = yaml.safe_load(open(config_path))['dependency_order']
+    reverse_dependency_order = [_ for _ in reverse_dependency_order if not _.startswith('_') and _ not in ['Project', 'Program']]
+    reverse_dependency_order = [(rank + 1, _) for rank, _ in enumerate(reverse_dependency_order)]
+    reverse_dependency_order.reverse()
+
+    results = []
+    conn = _connect_to_postgres()
+    with conn:
+        with conn.cursor() as curs:
+            for rank, _ in reverse_dependency_order:
+                if _.startswith('_'):
+                    continue
+                curs.execute(f"delete from 'node_{_.lower()}' where _props->>'project_id' = ?", (project_id,))
+                results.append({'table': f'node_{_.lower()}', 'project_id': project_id, 'count': curs.rowcount})
+            curs.execute(f"delete from 'node_project' where _props->>'code' = ?", (project,))
+            results.append({'table': f'node_project', 'project_id': project, 'count': curs.rowcount})
+
+    if output_format == 'yaml':
+        yaml.dump(results, sys.stdout, default_flow_style=False)
+    else:
+        json.dump(results, sys.stdout, indent=2)
 
 
 meta.add_command(meta_flat_load_cli)
