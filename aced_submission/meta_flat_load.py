@@ -662,7 +662,8 @@ def _delete(project_id, index):
             }
         }
     }
-    print(index, elastic.delete_by_query(index=index, body=query))
+    print("deleting, waiting up to 5 min. for response")
+    print(index, elastic.delete_by_query(index=index, body=query, timeout='5m'))
 
 
 if __name__ == '__main__':
