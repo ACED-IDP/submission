@@ -119,7 +119,7 @@ def _node_counts(config_path, output_format):
     cur = conn.cursor()
     cur.execute(sql)
     counts = cur.fetchall()
-    counts = [{'hierarchy_rank': _[0], 'table': _[1], 'node': _[2], 'count': _[3]} for _ in counts]
+    counts = [{'hierarchy_rank': _[0], 'table': _[1], 'node': _[2], 'project_id': _[3], 'count': _[4]} for _ in counts]
     if output_format == 'yaml':
         yaml.dump(counts, sys.stdout, default_flow_style=False)
     else:
