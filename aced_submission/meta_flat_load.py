@@ -664,5 +664,6 @@ def _delete(project_id, index):
     }
     print(index, elastic.delete_by_query(index=index, body=query))
 
+
 if __name__ == '__main__':
     cli()
