@@ -124,6 +124,8 @@ def _node_counts(config_path, output_format):
         json.dump(counts, sys.stdout, indent=2)
 
 
+meta.add_command(meta_flat_load_cli)
+
 @meta.group(name='discovery')
 def discovery():
     """Gen3 discovery database."""
