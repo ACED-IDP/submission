@@ -611,5 +611,60 @@ def chunk(arr_range, arr_size):
     return iter(lambda: tuple(islice(arr_range, arr_size)), ())
 
 
+@cli.command('counts')
+@click.option('--project_id', required=True,
+              default=None,
+              show_default=True,
+              help='program-project'
+              )
+def _counts(project_id):
+    """Count the number of patients, observations, and files."""
+    elastic = Elasticsearch([DEFAULT_ELASTIC], request_timeout=120)
+    program, project = project_id.split('-')
+    assert program, "program is required"
+    assert project, "project is required"
+    query = {
+        "query": {
+            "match": {
+                "auth_resource_path": f"/programs/{program}/projects/{project}"
+            }
+        }
+    }
+    for index in ['patient', 'observation', 'file']:
+        # index = f"{ES_INDEX_PREFIX}_{index}_0"
+        print(index, elastic.count(index=index, body=query)['count'])
+
+
+@cli.command('rm')
+@click.option('--project_id', required=True,
+              default=None,
+              show_default=True,
+              help='program-project'
+              )
+@click.option('--index', required=True,
+              default=None,
+              show_default=True,
+              help='one of patient, observation, file'
+              )
+
+def _delete(project_id, index):
+    """Delete items from elastic index for project_id."""
+    elastic = Elasticsearch([DEFAULT_ELASTIC], request_timeout=120)
+    assert project_id, "project_id is required"
+    program, project = project_id.split('-')
+    assert program, "program is required"
+    assert project, "project is required"
+    assert index, "index is required"
+    query = {
+        "query": {
+            "match": {
+                "auth_resource_path": f"/programs/{program}/projects/{project}"
+            }
+        }
+    }
+    print("deleting, waiting up to 5 min. for response")
+    print(index, elastic.delete_by_query(index=index, body=query, timeout='5m'))
+
+
 if __name__ == '__main__':
     cli()
