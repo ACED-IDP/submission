@@ -12,6 +12,7 @@ from yaml import SafeLoader
 
 import psycopg2
 import json
+import inflection
 
 from aced_submission.pelican import DataDictionaryTraversal
 
@@ -129,25 +130,34 @@ def load_edges(files, connection, dependency_order, mapping, project_node_id):
                     for line in lines:
                         d_ = json.loads(line)
                         relations = d_['relations']
+
+                        # TODO - ensure only one id per type simplifier
+                        set_ = dict((v['dst_id'], v) for v in relations).values()
+                        relations = [_ for _ in set_]
+
                         if d_['name'] in ['ResearchStudy', 'research_study']:
                             # link the ResearchStudy to the gen3 project
                             relations.append({"dst_id": project_node_id, "dst_name": "Project", "label": "project"})
                             logger.info(f"adding project relation from project({project_node_id}) to research_study{d_['id']}")
 
                         if len(relations) == 0:
+                            msg = f"No relations for {d_['name']}"
+                            if msg not in LOGGED_ALREADY:
+                                LOGGED_ALREADY.append(msg)
+                                print(msg)
                             continue
 
                         record_count += 1
                         for relation in relations:
 
                             # entity_name_underscore = inflection.underscore(entity_name)
-                            # dst_name_camel = inflection.camelize(relation['dst_name'])
+                            dst_name_camel = inflection.camelize(relation['dst_name'])
 
                             edge_table_mapping = next(
                                 iter(
                                     [
                                         m for m in mapping
-                                        if m['srcclass'] == entity_name and m['dstclass'] == relation['dst_name']
+                                        if m['srcclass'] == entity_name and m['dstclass'] == dst_name_camel
                                     ]
                                 ),
                                 None
@@ -161,6 +171,10 @@ def load_edges(files, connection, dependency_order, mapping, project_node_id):
                                     LOGGED_ALREADY.append(msg)
                                 continue
                             if not edge_table_mapping:
+                                msg = f"No mapping for src {entity_name} dst {relation['dst_name']}"
+                                if msg not in LOGGED_ALREADY:
+                                    print(msg)
+                                    LOGGED_ALREADY.append(msg)
                                 continue
                             table_name = edge_table_mapping['tablename']
                             # print(f"Mapping for src {entity_name} dst {relation['dst_name']} {table_name} {edge_table_mapping}")

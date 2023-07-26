@@ -646,7 +646,6 @@ def _counts(project_id):
               show_default=True,
               help='one of patient, observation, file'
               )
-
 def _delete(project_id, index):
     """Delete items from elastic index for project_id."""
     elastic = Elasticsearch([DEFAULT_ELASTIC], request_timeout=120)

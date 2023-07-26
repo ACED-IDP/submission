@@ -105,7 +105,7 @@ def _node_counts(config_path, output_format):
     dependency_order = [(rank + 1, _) for rank, _ in enumerate(dependency_order)]
 
     sql_selects = [
-        f"select 0 as hierarchy_rank, 'node_project' as table, 'Project' as node, _props->>'code' as project, count(*) as count from node_project group by _props->>'code'"]
+        "select 0 as hierarchy_rank, 'node_project' as table, 'Project' as node, _props->>'code' as project, count(*) as count from node_project group by _props->>'code'"]
     for rank, _ in dependency_order:
         if _.startswith('_'):
             continue
@@ -164,8 +164,8 @@ def _graph_rm(config_path, project_id, output_format):
                     continue
                 curs.execute(f"delete from node_{_.lower()} where _props->>'project_id' = %s;", (project_id,))
                 results.append({'table': f'node_{_.lower()}', 'project_id': project_id, 'count': curs.rowcount})
-            curs.execute(f"delete from node_project where _props->>'code' = %s;", (project,))
-            results.append({'table': f'node_project', 'project_id': project, 'count': curs.rowcount})
+            curs.execute("delete from node_project where _props->>'code' = %s;", (project,))
+            results.append({'table': 'node_project', 'project_id': project, 'count': curs.rowcount})
 
     if output_format == 'yaml':
         yaml.dump(results, sys.stdout, default_flow_style=False)
@@ -174,6 +174,7 @@ def _graph_rm(config_path, project_id, output_format):
 
 
 meta.add_command(meta_flat_load_cli)
+
 
 @meta.group(name='discovery')
 def discovery():
