@@ -1,3 +1,4 @@
+import os
 import pathlib
 import logging
 import requests
@@ -16,10 +17,15 @@ def ensure_auth(refresh_file: [pathlib.Path, str] = None, validate: bool = False
     """
 
     try:
-        if refresh_file:
+        if 'ACCESS_TOKEN' in os.environ:
+            access_token = os.environ
+            auth = Gen3Auth(refresh_file=f"accesstoken:///{access_token}")
+
+        elif refresh_file:
             if isinstance(refresh_file, str):
                 refresh_file = pathlib.Path(refresh_file)
             auth = Gen3Auth(refresh_file=refresh_file.name)
+
         else:
             auth = Gen3Auth()
 
