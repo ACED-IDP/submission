@@ -1,6 +1,7 @@
 import io
 import logging
 import pathlib
+import uuid
 from collections import defaultdict
 from datetime import datetime
 from itertools import islice
@@ -204,6 +205,8 @@ def meta_upload(source_path, program, project, credentials_file, silent, diction
     dependency_order = [c for c in gen3_config['dependency_order'] if not c.startswith('_')]
     dependency_order = [c for c in dependency_order if c not in ['Program', 'Project']]
 
+    ensure_project(program, project)
+
     # check db connection
     conn = _connect_to_postgres()
     assert conn
@@ -243,3 +246,60 @@ def meta_upload(source_path, program, project, credentials_file, silent, diction
     logger.info("Loading edges")
     load_edges(files, conn, dependency_order, mappings, project_node_id)
     logger.info("Done")
+
+
+
+PROGRAM_SEED = uuid.UUID("85b08c6a-56a6-4474-9c30-b65abfd214a8")
+PROJECT_SEED = uuid.UUID("249b4405-2c69-45d9-96bc-7410333d5d80")
+
+def ensure_project(program, project) -> bool:
+    """Ensure project exists in sheepdog database."""
+    # check db connection
+    conn = _connect_to_postgres()
+    assert conn
+    logger.info("Connected to postgres")
+
+    # check program/project exist
+    cur = conn.cursor()
+    cur.execute("select node_id, _props from \"node_program\";")
+    programs = cur.fetchall()
+    programs = [{'node_id': p[0], '_props': p[1]} for p in programs]
+    _ = next(iter([p for p in programs if p['_props']['name'] == program]), None)
+    program_node_id = None
+    if not _:  # program does not exist
+        logger.info(f"Program {program} does not exist")
+        program_node_id = str(uuid.uuid5(PROGRAM_SEED, program))
+        cur.execute(
+            "INSERT INTO node_program(node_id, _props)",
+            (program_node_id, json.dumps({'name': program, 'type': 'program', "dbgap_accession_number": program}))
+        )
+        conn.commit()
+        logger.info(f"Created Program {program}: {program_node_id}")
+    else:
+        program_node_id = _['node_id']
+        logger.info(f"Program {program} exists: {program_node_id}")
+
+
+    cur.execute("select node_id, _props from \"node_project\";")
+    projects = cur.fetchall()
+    projects = [{'node_id': p[0], '_props': p[1]} for p in projects]
+    project_code = project
+    project_node_id = next(iter([p['node_id'] for p in projects if p['_props']['code'] == project_code]), None)
+    if not project_node_id:  # project does not exist
+        logger.info(f"Project {project_code} does not exist")
+        project_node_id = str(uuid.uuid5(PROJECT_SEED, project))
+        cur.execute(
+            "INSERT INTO node_project(node_id, _props)",
+            (project_node_id, json.dumps({'code': project, 'type': 'project', "state": "open","dbgap_accession_number": project}))
+        )
+        conn.commit()
+        logger.info(f"Created Project {project}: {project_node_id}")
+        cur.execute(
+            "INSERT INTO edge_projectmemberofprogram(src_id, dst_id)",
+            (project_node_id, program_node_id)
+        )
+        conn.commit()
+        logger.info(f"Created edge_projectmemberofprogram between {project_node_id} -> {program_node_id}")
+
+    project_id = f"{program}-{project}"
+    logger.info(f"Program and project exist: {project_id} {project_node_id}")
