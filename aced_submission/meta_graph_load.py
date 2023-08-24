@@ -270,7 +270,7 @@ def ensure_project(program, project) -> bool:
         logger.info(f"Program {program} does not exist")
         program_node_id = str(uuid.uuid5(PROGRAM_SEED, program))
         cur.execute(
-            "INSERT INTO node_program(node_id, _props)",
+            "INSERT INTO node_program(node_id, _props) VALUES (%s, %s) ON CONFLICT DO NOTHING",
             (program_node_id, json.dumps({'name': program, 'type': 'program', "dbgap_accession_number": program}))
         )
         conn.commit()
@@ -289,7 +289,7 @@ def ensure_project(program, project) -> bool:
         logger.info(f"Project {project_code} does not exist")
         project_node_id = str(uuid.uuid5(PROJECT_SEED, project))
         cur.execute(
-            "INSERT INTO node_project(node_id, _props)",
+            "INSERT INTO node_project(node_id, _props) VALUES (%s, %s) ON CONFLICT DO NOTHING",
             (project_node_id, json.dumps({'code': project, 'type': 'project', "state": "open","dbgap_accession_number": project}))
         )
         conn.commit()
