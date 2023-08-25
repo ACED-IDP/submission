@@ -248,7 +248,7 @@ def meta_upload(source_path, program, project, credentials_file, silent, diction
     logger.info("Done")
 
 
-
+# see https://github.com/uc-cdis/sheepdog/blob/master/sheepdog/globals.py#L51-L52
 PROGRAM_SEED = uuid.UUID("85b08c6a-56a6-4474-9c30-b65abfd214a8")
 PROJECT_SEED = uuid.UUID("249b4405-2c69-45d9-96bc-7410333d5d80")
 
@@ -295,7 +295,7 @@ def ensure_project(program, project) -> bool:
         conn.commit()
         logger.info(f"Created Project {project}: {project_node_id}")
         cur.execute(
-            "INSERT INTO edge_projectmemberofprogram(src_id, dst_id)",
+            "INSERT INTO edge_projectmemberofprogram(src_id, dst_id)  VALUES (%s, %s) ON CONFLICT DO NOTHING",
             (project_node_id, program_node_id)
         )
         conn.commit()
@@ -303,3 +303,44 @@ def ensure_project(program, project) -> bool:
 
     project_id = f"{program}-{project}"
     logger.info(f"Program and project exist: {project_id} {project_node_id}")
+
+
+# def empty_project(project_id:str, config_path, dictionary_path, mapping:List[dict]):
+#     """Delete project data from sheepdog database."""
+#     conn = _connect_to_postgres()
+#     assert conn
+#     cur = conn.cursor()
+#     logger.info("Connected to postgres")
+#
+#     assert pathlib.Path(config_path).is_file(), f"{config_path} should be a file"
+#
+#     config_path = pathlib.Path(config_path)
+#     assert config_path.is_file()
+#     with open(config_path) as fp:
+#         gen3_config = yaml.load(fp, SafeLoader)
+#
+#     dependency_order = [c for c in gen3_config['dependency_order'] if not c.startswith('_')]
+#     dependency_order = [c for c in dependency_order if c not in ['Program', 'Project']]
+#
+#     dependency_order = dependency_order.reverse()
+#
+#     # check the mappings
+#     dictionary_dir = dictionary_path if 'http' not in dictionary_path else None
+#     dictionary_url = dictionary_path if 'http' in dictionary_path else None
+#     mappings = [mapping for mapping in _table_mappings(dictionary_dir, dictionary_url)]
+#
+#     for entity_name in dependency_order:
+#
+#         data_table_name = next(
+#             iter(
+#                 set([m['dsttable'] for m in mapping if m['dstclass'].lower() == entity_name.lower()] +
+#                     [m['srctable'] for m in mapping if m['srcclass'].lower() == entity_name.lower()])
+#             ),
+#             None)
+#         if not data_table_name:
+#             logger.warning(f"No mapping found for {entity_name} skipping")
+#             continue
+#
+#         logger.info(f"deleting {project_id} from {data_table_name}")
+#
+#         cur.execute(f"DELETE FROM {data_table_name} WHERE node_id LIKE '{project_id}-%';")
