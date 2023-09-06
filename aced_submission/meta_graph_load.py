@@ -88,10 +88,22 @@ def load_vertices(files, connection, dependency_order, project_id, mapping):
             continue
         logger.info(f"loading {path} into {data_table_name}")
 
+        columns = ['node_id', '_props', 'acl', '_sysan', 'created']
+        # Select only columns to be updated (in my case, all non-id columns)
+        update_set = ['_props', 'acl', '_sysan', 'created']
+
         with connection.cursor() as cursor:
             with open(path) as f:
                 # copy a block of records into a file like stringIO buffer
                 record_count = 0
+                # Creates temporary empty table with same columns and types as
+                # the final table
+                cursor.execute(
+                    f"""
+                    CREATE TEMPORARY TABLE tmp_{data_table_name} (LIKE {data_table_name})
+                    ON COMMIT DROP
+                    """
+                )
                 for lines in chunk(f.readlines(), 1000):
                     buf = io.StringIO()
                     for line in lines:
@@ -106,7 +118,15 @@ def load_vertices(files, connection, dependency_order, project_id, mapping):
                     buf.seek(0)
                     # efficient way to write to postgres
                     cursor.copy_from(buf, data_table_name, sep='\t',
-                                     columns=['node_id', '_props', 'acl', '_sysan', 'created'])
+                                     columns=columns)
+                    # handle conflicts
+                    cursor.execute(
+                        f"""
+                        INSERT INTO {data_table_name}({', '.join(columns)})
+                        SELECT * FROM tmp_{data_table_name}
+                        ON CONFLICT (node_id) DO UPDATE SET {update_set}
+                        """
+                    )
                     logger.info(f"wrote {record_count} records to {data_table_name} from {path}")
                     connection.commit()
         connection.commit()
