@@ -90,7 +90,8 @@ def load_vertices(files, connection, dependency_order, project_id, mapping):
 
         columns = ['node_id', '_props', 'acl', '_sysan', 'created']
         # Select only columns to be updated (in my case, all non-id columns)
-        update_set = ['_props', 'acl', '_sysan', 'created']
+        # update_set = ", ".join([f"{v}=EXCLUDED.{v}" for v in ['_props', 'acl', '_sysan', 'created']])
+        update_set = ' _props=EXCLUDED._props, acl=EXCLUDED.acl, _sysan=EXCLUDED._sysan, created=EXCLUDED.created '
 
         with connection.cursor() as cursor:
             with open(path) as f:
@@ -117,13 +118,13 @@ def load_vertices(files, connection, dependency_order, project_id, mapping):
                         buf.write(_csv)
                     buf.seek(0)
                     # efficient way to write to postgres
-                    cursor.copy_from(buf, data_table_name, sep='\t',
+                    cursor.copy_from(buf, f'tmp_{data_table_name}', sep='\t',
                                      columns=columns)
                     # handle conflicts
                     cursor.execute(
                         f"""
                         INSERT INTO {data_table_name}({', '.join(columns)})
-                        SELECT * FROM tmp_{data_table_name}
+                        SELECT  node_id, _props::jsonb, acl, _sysan, created FROM tmp_{data_table_name} 
                         ON CONFLICT (node_id) DO UPDATE SET {update_set}
                         """
                     )
@@ -159,7 +160,8 @@ def load_edges(files, connection, dependency_order, mapping, project_node_id):
                         if d_['name'] in ['ResearchStudy', 'research_study']:
                             # link the ResearchStudy to the gen3 project
                             relations.append({"dst_id": project_node_id, "dst_name": "Project", "label": "project"})
-                            logger.info(f"adding project relation from project({project_node_id}) to research_study{d_['id']}")
+                            logger.info(
+                                f"adding project relation from project({project_node_id}) to research_study{d_['id']}")
 
                         if len(relations) == 0:
                             msg = f"No relations for {d_['name']}"
@@ -207,11 +209,13 @@ def load_edges(files, connection, dependency_order, mapping, project_node_id):
                         # efficient way to write to postgres
                         cursor.copy_from(buf, table_name, sep='|',
                                          columns=['src_id', 'dst_id', 'acl', '_sysan', '_props', 'created'])
-                        logger.info(f"wrote {record_count} records to {table_name} from {path} {entity_name} {relation['dst_name']}")
+                        logger.info(
+                            f"wrote {record_count} records to {table_name} from {path} {entity_name} {relation['dst_name']}")
         connection.commit()
 
 
-def meta_upload(source_path, program, project, credentials_file, silent, dictionary_path, config_path, file_name_pattern='**/*.ndjson'):
+def meta_upload(source_path, program, project, credentials_file, silent, dictionary_path, config_path,
+                file_name_pattern='**/*.ndjson'):
     """Copy simplified json into Gen3."""
     assert pathlib.Path(source_path).is_dir(), f"{source_path} should be a directory"
     assert pathlib.Path(config_path).is_file(), f"{config_path} should be a file"
@@ -272,6 +276,7 @@ def meta_upload(source_path, program, project, credentials_file, silent, diction
 PROGRAM_SEED = uuid.UUID("85b08c6a-56a6-4474-9c30-b65abfd214a8")
 PROJECT_SEED = uuid.UUID("249b4405-2c69-45d9-96bc-7410333d5d80")
 
+
 def ensure_project(program, project) -> bool:
     """Ensure project exists in sheepdog database."""
     # check db connection
@@ -299,7 +304,6 @@ def ensure_project(program, project) -> bool:
         program_node_id = _['node_id']
         logger.info(f"Program {program} exists: {program_node_id}")
 
-
     cur.execute("select node_id, _props from \"node_project\";")
     projects = cur.fetchall()
     projects = [{'node_id': p[0], '_props': p[1]} for p in projects]
@@ -310,7 +314,8 @@ def ensure_project(program, project) -> bool:
         project_node_id = str(uuid.uuid5(PROJECT_SEED, project))
         cur.execute(
             "INSERT INTO node_project(node_id, _props) VALUES (%s, %s) ON CONFLICT DO NOTHING",
-            (project_node_id, json.dumps({'code': project, 'type': 'project', "state": "open","dbgap_accession_number": project}))
+            (project_node_id,
+             json.dumps({'code': project, 'type': 'project', "state": "open", "dbgap_accession_number": project}))
         )
         conn.commit()
         logger.info(f"Created Project {project}: {project_node_id}")
@@ -323,4 +328,3 @@ def ensure_project(program, project) -> bool:
 
     project_id = f"{program}-{project}"
     logger.info(f"Program and project exist: {project_id} {project_node_id}")
-
