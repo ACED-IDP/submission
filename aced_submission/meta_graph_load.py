@@ -147,6 +147,7 @@ def load_edges(files, connection, dependency_order, mapping, project_node_id):
             with open(path) as f:
                 # copy a block of records into a file like stringIO buffer
                 record_count = 0
+
                 for lines in chunk(f.readlines(), 100):
                     buffers = defaultdict(io.StringIO)
                     for line in lines:
@@ -206,11 +207,31 @@ def load_edges(files, connection, dependency_order, mapping, project_node_id):
                             buf.write(f"{d_['id']}|{relation['dst_id']}|{{}}|{{}}|{{}}|{datetime.now()}\n")
                     for table_name, buf in buffers.items():
                         buf.seek(0)
+                        # Creates temporary empty table with same columns and types as
+                        # the final table
+                        cursor.execute(
+                            f"""
+                            CREATE TEMPORARY TABLE "tmp_{table_name}" (LIKE "{table_name}")
+                            ON COMMIT DROP
+                            """
+                        )
+
+                        columns = ['src_id', 'dst_id', 'acl', '_sysan', '_props', 'created']
+                        update_set = ", ".join([f"{v}=EXCLUDED.{v}" for v in ['acl', '_sysan', '_props', 'created']])
                         # efficient way to write to postgres
-                        cursor.copy_from(buf, table_name, sep='|',
-                                         columns=['src_id', 'dst_id', 'acl', '_sysan', '_props', 'created'])
+                        cursor.copy_from(buf, f"tmp_{table_name}", sep='|',
+                                         columns=columns)
+                        # handle conflicts
+                        cursor.execute(
+                            f"""
+                            INSERT INTO "{table_name}" ({', '.join(columns)})
+                            SELECT  {', '.join(columns)} FROM "tmp_{table_name}" 
+                            ON CONFLICT (src_id, dst_id) DO UPDATE SET {update_set}
+                            """
+                        )
                         logger.info(
                             f"wrote {record_count} records to {table_name} from {path} {entity_name} {relation['dst_name']}")
+                        connection.commit()
         connection.commit()
 
 
