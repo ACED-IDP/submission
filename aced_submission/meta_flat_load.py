@@ -1,6 +1,5 @@
-#!/usr/bin/env python3
+"""Load flat indexes into elasticsearch."""
 
-"""Load Gen3."""
 
 import csv
 import json
@@ -237,7 +236,8 @@ def write_bulk_http(elastic, index, limit, doc_type, generator, schema):
                 '_index': index,
                 '_op_type': 'index',
                 '_type': doc_type,
-                '_source': dict_
+                '_source': dict_,
+                '_id': dict_['id']
             }
             counter_ += 1
             if counter_ % 10000 == 0:
