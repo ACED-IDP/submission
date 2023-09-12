@@ -24,7 +24,6 @@ def resource_generator(project_id, file_path):
     assert project, "project is required"
 
     for _ in read_ndjson(file_path):
-        _['project_id'] = project_id
         _["auth_resource_path"] = f"/programs/{program}/projects/{project}"
         yield _
 
@@ -73,12 +72,13 @@ def fhir_get(project_id, path, elastic_url) -> list[str]:
 
     auth_resource_path = f"/programs/{program}/projects/{project}"
 
-    for _ in elastic.search(index=index, doc_type=doc_type,
-                            q={"query": {"match": {"auth_resource_path": auth_resource_path}}}):
+    res = elastic.search(index=index, doc_type=doc_type, body={"query": {"match": {"auth_resource_path": auth_resource_path}}})
+    for _ in res['hits']['hits']:
         resource_type = _['_source']['resourceType']
-        file = _emitter(resource_type)
-        json.dump(_['_source'], file)
-        file.write('\n')
+        _file = _emitter(resource_type)
+        del _['_source']['auth_resource_path']
+        json.dump(_['_source'], _file)
+        _file.write('\n')
 
     for file in emitters.values():
         file.close()
