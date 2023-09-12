@@ -61,6 +61,7 @@ def fhir_get(project_id, path, elastic_url) -> list[str]:
     emitters = {}
     open_files = []
 
+    pathlib.Path(path).mkdir(parents=True, exist_ok=True)
 
     def _emitter(_resource_type):
         """Maintain has of open files."""
