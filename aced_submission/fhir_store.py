@@ -11,8 +11,8 @@ from aced_submission import NaturalOrderGroup
 from aced_submission.meta_flat_load import read_ndjson, write_bulk_http, DEFAULT_ELASTIC
 
 
-@click.group(cls=NaturalOrderGroup)
-def fhir():
+@click.group(cls=NaturalOrderGroup, name='fhir')
+def fhir_store():
     """Adds, retrieves, and deletes FHIR resources in a FHIR store."""
     pass
 
@@ -88,17 +88,21 @@ def fhir_get(project_id, path, elastic_url) -> list[str]:
     return logs
 
 
-@fhir.command(name='put')
-@fhir.option('--project_id', required=True, show_default=True,
+@fhir_store.command(name='put')
+@click.option('--project_id', required=True, show_default=True,
               help="Gen3 program-project")
-@fhir.option('--format', 'output_format',
+@click.option('--format', 'output_format',
               default='yaml',
               show_default=True,
               type=click.Choice(['yaml', 'json'], case_sensitive=False))
 @click.option('--elastic_url', default=DEFAULT_ELASTIC, show_default=True)
-@fhir.argument('path', default=None, required=True, show_default=True)
+@click.argument('path', default=None, required=True)
 def _fhir_put(project_id, output_format, path, elastic_url):
-    """Upsert FHIR resources to a FHIR store."""
+    """Upsert FHIR resources to a FHIR store.
+
+    \b
+    PATH: directory containing ndjson files
+    """
     logs = fhir_put(project_id, path, elastic_url)
     if output_format == 'yaml':
         yaml.dump(logs, sys.stdout, default_flow_style=False)
@@ -107,17 +111,20 @@ def _fhir_put(project_id, output_format, path, elastic_url):
 
 
 
-@fhir.command(name='get')
-@fhir.option('--project_id', required=True, show_default=True,
+@fhir_store.command(name='get')
+@click.option('--project_id', required=True, show_default=True,
               help="Gen3 program-project")
-@fhir.option('--format', 'output_format',
+@click.option('--format', 'output_format',
              default='yaml',
              show_default=True,
              type=click.Choice(['yaml', 'json'], case_sensitive=False))
 @click.option('--elastic_url', default=DEFAULT_ELASTIC, show_default=True)
-@fhir.argument('path', default=None, required=True, show_default=True)
+@click.argument('path', default=None, required=True)
 def _fhir_get(project_id, output_format, path, elastic_url):
-    """Exports all resources for project_id to a directory."""
+    """Exports all resources for project_id to a directory.
+    \b
+    PATH: directory to write ndjson files
+    """
     logs = fhir_get(project_id, path, elastic_url)
     if output_format == 'yaml':
         yaml.dump(logs, sys.stdout, default_flow_style=False)
