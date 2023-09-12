@@ -245,8 +245,9 @@ def write_bulk_http(elastic, index, limit, doc_type, generator, schema):
                 logger.info(f"{counter_} records written")
         logger.info(f"{counter_} records written")
 
-    logger.info(f'Creating {doc_type} indices.')
-    index_dict = create_indexes(schema, _index=index, doc_type=doc_type)
+    if schema:
+        logger.info(f'Creating {doc_type} indices.')
+        index_dict = create_indexes(schema, _index=index, doc_type=doc_type)
 
     try:
         elastic.indices.create(index=index_dict['index'], body=index_dict['json'])
