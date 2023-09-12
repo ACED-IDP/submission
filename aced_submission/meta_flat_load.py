@@ -237,6 +237,7 @@ def write_bulk_http(elastic, index, limit, doc_type, generator, schema):
                 '_op_type': 'index',
                 '_type': doc_type,
                 '_source': dict_,
+                # use the id from the FHIR object to upsert information
                 '_id': dict_['id']
             }
             counter_ += 1
