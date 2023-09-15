@@ -245,14 +245,18 @@ def write_bulk_http(elastic, index, limit, doc_type, generator, schema):
                 logger.info(f"{counter_} records written")
         logger.info(f"{counter_} records written")
 
-    logger.info(f'Creating {doc_type} indices.')
-    index_dict = create_indexes(schema, _index=index, doc_type=doc_type)
+    if schema:
+        logger.info(f'Creating {doc_type} indices.')
+        index_dict = create_indexes(schema, _index=index, doc_type=doc_type)
 
-    try:
-        elastic.indices.create(index=index_dict['index'], body=index_dict['json'])
-    except Exception as e:
-        logger.warning(f"Could not create index. {index} {str(e)}")
-        logger.warning("Continuing to load.")
+        try:
+            elastic.indices.create(index=index_dict['index'], body=index_dict['json'])
+        except Exception as e:
+            if 'resource_already_exists_exception' in str(e):
+                logger.debug(f"Could not create index. {index} {str(e)}")
+                logger.debug("Continuing to load.")
+            else:
+                raise e
 
     logger.info(f'Writing bulk to {index} limit {limit}.')
     _ = bulk(client=elastic,
