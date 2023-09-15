@@ -24,6 +24,8 @@ def resource_generator(project_id, file_path):
     assert project, "project is required"
 
     for _ in read_ndjson(file_path):
+        assert 'id' in _, f"resource {_} does not have an 'id'"
+        assert 'resourceType' in _, f"resource {_} does not have a 'resourceType'"
         _["auth_resource_path"] = f"/programs/{program}/projects/{project}"
         yield _
 
