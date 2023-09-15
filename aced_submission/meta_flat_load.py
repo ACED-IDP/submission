@@ -1,6 +1,5 @@
-#!/usr/bin/env python3
+"""Load flat indexes into elasticsearch."""
 
-"""Load Gen3."""
 
 import csv
 import json
@@ -237,21 +236,27 @@ def write_bulk_http(elastic, index, limit, doc_type, generator, schema):
                 '_index': index,
                 '_op_type': 'index',
                 '_type': doc_type,
-                '_source': dict_
+                '_source': dict_,
+                # use the id from the FHIR object to upsert information
+                '_id': dict_['id']
             }
             counter_ += 1
             if counter_ % 10000 == 0:
                 logger.info(f"{counter_} records written")
         logger.info(f"{counter_} records written")
 
-    logger.info(f'Creating {doc_type} indices.')
-    index_dict = create_indexes(schema, _index=index, doc_type=doc_type)
+    if schema:
+        logger.info(f'Creating {doc_type} indices.')
+        index_dict = create_indexes(schema, _index=index, doc_type=doc_type)
 
-    try:
-        elastic.indices.create(index=index_dict['index'], body=index_dict['json'])
-    except Exception as e:
-        logger.warning(f"Could not create index. {index} {str(e)}")
-        logger.warning("Continuing to load.")
+        try:
+            elastic.indices.create(index=index_dict['index'], body=index_dict['json'])
+        except Exception as e:
+            if 'resource_already_exists_exception' in str(e):
+                logger.debug(f"Could not create index. {index} {str(e)}")
+                logger.debug("Continuing to load.")
+            else:
+                raise e
 
     logger.info(f'Writing bulk to {index} limit {limit}.')
     _ = bulk(client=elastic,
