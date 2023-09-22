@@ -97,14 +97,6 @@ def load_vertices(files, connection, dependency_order, project_id, mapping):
             with open(path) as f:
                 # copy a block of records into a file like stringIO buffer
                 record_count = 0
-                # Creates temporary empty table with same columns and types as
-                # the final table
-                cursor.execute(
-                    f"""
-                    CREATE TEMPORARY TABLE tmp_{data_table_name} (LIKE {data_table_name})
-                    ON COMMIT DROP
-                    """
-                )
                 for lines in chunk(f.readlines(), 1000):
                     # Creates temporary empty table with same columns and types as
                     # the final table
