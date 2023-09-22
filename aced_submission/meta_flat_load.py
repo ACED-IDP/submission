@@ -465,6 +465,10 @@ def write_flat_file(output_path, index, doc_type, limit, generator, schema):
               help='Path to flattened json'
               )
 def _denormalize_patient(input_path):
+    denormalize_patient(input_path)
+
+
+def denormalize_patient(input_path):
     """Gather Patient, FamilyHistory, Condition into sqlite db."""
 
     path = pathlib.Path(input_path)
@@ -539,9 +543,12 @@ def _denormalize_patient(input_path):
               show_default=True,
               help='Do not load elastic, write flat model to file instead'
               )
-def load_flat(project_id, index, path, limit, elastic_url, schema_path, output_path):
+def _load_flat(project_id, index, path, limit, elastic_url, schema_path, output_path):
     """Gen3 Elastic Search data into guppy (patient, observation, files, etc.)."""
+    load_flat(project_id, index, path, limit, elastic_url, schema_path, output_path)
 
+
+def load_flat(project_id, index, path, limit, elastic_url, schema_path, output_path):
     # replaces tube_lite
 
     if limit:
@@ -623,6 +630,10 @@ def chunk(arr_range, arr_size):
               help='program-project'
               )
 def _counts(project_id):
+    counts(project_id)
+
+
+def counts(project_id):
     """Count the number of patients, observations, and files."""
     elastic = Elasticsearch([DEFAULT_ELASTIC], request_timeout=120)
     program, project = project_id.split('-')
@@ -652,6 +663,10 @@ def _counts(project_id):
               help='one of patient, observation, file'
               )
 def _delete(project_id, index):
+    delete(project_id, index)
+
+
+def delete(project_id, index):
     """Delete items from elastic index for project_id."""
     elastic = Elasticsearch([DEFAULT_ELASTIC], request_timeout=120)
     assert project_id, "project_id is required"
