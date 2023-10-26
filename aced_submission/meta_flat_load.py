@@ -1,6 +1,5 @@
-#!/usr/bin/env python3
+"""Load flat indexes into elasticsearch."""
 
-"""Load Gen3."""
 
 import csv
 import json
@@ -237,21 +236,27 @@ def write_bulk_http(elastic, index, limit, doc_type, generator, schema):
                 '_index': index,
                 '_op_type': 'index',
                 '_type': doc_type,
-                '_source': dict_
+                '_source': dict_,
+                # use the id from the FHIR object to upsert information
+                '_id': dict_['id']
             }
             counter_ += 1
             if counter_ % 10000 == 0:
                 logger.info(f"{counter_} records written")
         logger.info(f"{counter_} records written")
 
-    logger.info(f'Creating {doc_type} indices.')
-    index_dict = create_indexes(schema, _index=index, doc_type=doc_type)
+    if schema:
+        logger.info(f'Creating {doc_type} indices.')
+        index_dict = create_indexes(schema, _index=index, doc_type=doc_type)
 
-    try:
-        elastic.indices.create(index=index_dict['index'], body=index_dict['json'])
-    except Exception as e:
-        logger.warning(f"Could not create index. {index} {str(e)}")
-        logger.warning("Continuing to load.")
+        try:
+            elastic.indices.create(index=index_dict['index'], body=index_dict['json'])
+        except Exception as e:
+            if 'resource_already_exists_exception' in str(e):
+                logger.debug(f"Could not create index. {index} {str(e)}")
+                logger.debug("Continuing to load.")
+            else:
+                raise e
 
     logger.info(f'Writing bulk to {index} limit {limit}.')
     _ = bulk(client=elastic,
@@ -460,6 +465,10 @@ def write_flat_file(output_path, index, doc_type, limit, generator, schema):
               help='Path to flattened json'
               )
 def _denormalize_patient(input_path):
+    denormalize_patient(input_path)
+
+
+def denormalize_patient(input_path):
     """Gather Patient, FamilyHistory, Condition into sqlite db."""
 
     path = pathlib.Path(input_path)
@@ -534,9 +543,12 @@ def _denormalize_patient(input_path):
               show_default=True,
               help='Do not load elastic, write flat model to file instead'
               )
-def load_flat(project_id, index, path, limit, elastic_url, schema_path, output_path):
+def _load_flat(project_id, index, path, limit, elastic_url, schema_path, output_path):
     """Gen3 Elastic Search data into guppy (patient, observation, files, etc.)."""
+    load_flat(project_id, index, path, limit, elastic_url, schema_path, output_path)
 
+
+def load_flat(project_id, index, path, limit, elastic_url, schema_path, output_path):
     # replaces tube_lite
 
     if limit:
@@ -618,6 +630,10 @@ def chunk(arr_range, arr_size):
               help='program-project'
               )
 def _counts(project_id):
+    counts(project_id)
+
+
+def counts(project_id):
     """Count the number of patients, observations, and files."""
     elastic = Elasticsearch([DEFAULT_ELASTIC], request_timeout=120)
     program, project = project_id.split('-')
@@ -647,6 +663,10 @@ def _counts(project_id):
               help='one of patient, observation, file'
               )
 def _delete(project_id, index):
+    delete(project_id, index)
+
+
+def delete(project_id, index):
     """Delete items from elastic index for project_id."""
     elastic = Elasticsearch([DEFAULT_ELASTIC], request_timeout=120)
     assert project_id, "project_id is required"

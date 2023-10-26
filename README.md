@@ -14,22 +14,23 @@ pip install -e .
 
 ## Use
 
-### Upload files
-```
-study=Alcoholism
-aced_submission files upload  --program aced --project $study --bucket_name $study'_BUCKET' --document_reference_path studies/$study
-```
+see etl pod
 
-### Upload metadata
-```commandline
-aced_submission meta upload  --program aced --project Alcoholism $Alcoholism_BUCKET --document_reference_path studies/Alcoholism
+## Distribution
+
+- PyPi
 
 ```
+# update pypi
 
-## Test
+# pypi credentials - see https://twine.readthedocs.io/en/stable/#environment-variables
 
-* fixtures
+export TWINE_USERNAME=  #  the username to use for authentication to the repository.
+export TWINE_PASSWORD=  # the password to use for authentication to the repository.
 
-```
-TODO --
+# this could be maintained as so: export $(cat .env | xargs)
+
+rm -r dist/
+python3  setup.py sdist bdist_wheel
+twine upload dist/*
 ```

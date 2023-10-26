@@ -41,12 +41,12 @@ setup(
 
     # Versions should comply with PEP 440:
     # https://packaging.python.org/en/latest/single_source_version.html
-    version='0.0.5',  # Required
+    version='0.0.8rc2',  # Required
 
     # This is a one-line description or tagline of what your project does. This
     # corresponds to the "Summary" metadata field:
     # https://packaging.python.org/specifications/core-metadata/#summary
-    description='Create FHIR ResearchStudy from directory',
+    description='Populate ACED commons from FHIR resources',
     # Optional
 
     # This field corresponds to the "Description" metadata field:
@@ -75,7 +75,7 @@ setup(
         'Intended Audience :: Developers',
         'Topic :: Software Development :: Build Tools',
 
-        'License :: OSI Approved :: APACHE License',
+        'License :: OSI Approved :: MIT License',
 
         # Specify the Python versions you support here.
         'Programming Language :: Python :: 3.9',

@@ -3,6 +3,7 @@ import pathlib
 import click
 
 from aced_submission import NaturalOrderGroup
+from aced_submission.fhir_store import fhir_store
 from aced_submission.meta import meta
 from aced_submission.uploader import files
 import logging
@@ -19,7 +20,7 @@ def cli():
 
 cli.add_command(meta)
 cli.add_command(files)
-
+cli.add_command(fhir_store)
 
 @cli.command(name='schema-publish')
 @click.argument('dictionary_path', default='iceberg/schemas/gen3/aced.json')
