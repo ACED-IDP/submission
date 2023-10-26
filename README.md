@@ -14,7 +14,12 @@ pip install -e .
 
 ## Use
 
+### job
 see etl pod
+
+### server
+
+* `uvicorn bundle_service.main:app --reload`
 
 ## Distribution
 

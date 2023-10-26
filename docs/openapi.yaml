@@ -1,0 +1,181 @@
+openapi: 3.1.0
+info:
+  title: ACED Submission
+  contact: {}
+  version: 0.0.1
+servers:
+- url: https://aced-idp.org/Bundle
+  description: ACED FHIR Bundle Implementation
+paths:
+  /Bundle:
+   post:
+      tags:
+      - Submission
+      summary: "Import a FHIR Bundle"
+      description: "Apply Bundle's entries to ACED backend data model"
+      parameters:
+        - in: header
+          name: Authorization
+          schema:
+            type: string
+          required: false
+      requestBody:
+        content: 
+          application/fhir+json:
+            schema:
+              $ref: "#/components/schemas/Bundle"  # type=transaction
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bundle' # type=transaction-response
+        default:
+          description: Unprocessable Entity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bundle' # type=transaction-response
+
+  /_status:
+    get:
+      tags:
+        - system
+      summary: Returns if service is healthy or not
+      description: >-
+        Health check endpoint
+      produces:
+        - application/text
+      responses:
+        '200':
+          description: Healthy
+        default:
+          description: Unhealthy
+
+components:
+
+  schemas:
+
+    Bundle:
+      description: A container for a collection of resources.  see https://hl7.org/fhir/R5/bundle.schema.json.html
+      properties:
+        resourceType:
+          description: This is a Bundle resource
+          enum: [Bundle]
+        identifier:
+          description: A persistent identifier for the bundle that won't change as a bundle is copied from server to server.
+          $ref: "#/components/schemas/Identifier"
+          type: array
+        type:
+          description: Indicates the purpose of this bundle - how it is intended to be used.
+          enum:
+          - transaction
+          - transaction-response
+        entry:
+          description: An entry in a bundle resource - will either contain a resource or information about a resource (transactions and history only).
+          items:
+            "$ref": "#/components/schemas/Bundle_Entry"
+          type: array
+
+      type: object
+      additionalProperties: true
+      required:
+      - resourceType
+
+    Bundle_Entry:
+      description: A container for a collection of resources.
+      properties:
+        fullUrl:
+          description: "The Absolute URL for the resource. Except for transactions and
+            batches, each entry in a Bundle must have a fullUrl. The fullUrl SHALL NOT
+            disagree with the id in the resource - i.e. if the fullUrl is not a urn:uuid,
+            the URL shall be version-independent URL consistent with the Resource.id.
+            The fullUrl is a version independent reference to the resource. Even when
+            not required, fullUrl MAY be set to a urn:uuid to allow referencing entries
+            in a transaction. The fullUrl can be an arbitrary URI and is not limited to
+            urn:uuid, urn:oid, http, and https. The fullUrl element SHALL have a value
+            except when: \n* invoking a create\n* invoking or responding to an operation
+            where the body is not a single identified resource\n* invoking or returning
+            the results of a search or history operation."
+          "$ref": "#/components/schemas/uri"
+        resource:
+          description: The Resource for the entry. The purpose/meaning of the resource
+            is determined by the Bundle.type. This is allowed to be a Parameters resource
+            if and only if it is referenced by something else within the Bundle that provides
+            context/meaning.
+          type: object
+        request:
+          description: Additional information about how this entry should be processed
+            as part of a transaction or batch.  For history, it shows how the entry was
+            processed to create the version contained in the entry.
+          "$ref": "#/components/schemas/Bundle_Request"
+        response:
+          description: Indicates the results of processing the corresponding 'request'
+            entry in the batch or transaction being responded to or what the results of
+            an operation where when returning history.
+          "$ref": "#/components/schemas/Bundle_Response"
+      type: object
+      additionalProperties: true
+
+    Bundle_Request:
+      description: A container for a collection of resources.
+      properties:
+        method:
+          description: In a transaction or batch, this is the HTTP action to be executed
+            for this entry. In a history bundle, this indicates the HTTP action that occurred.
+          "$ref": "#/components/schemas/code"
+        url:
+          description: The URL for this entry, relative to the root (the address to which the request is posted).
+          "$ref": "#/components/schemas/uri"
+
+      type: object
+      additionalProperties: true
+
+    Bundle_Response:
+      description: A container for a collection of resources.
+      properties:
+        status:
+          description: The status code returned by processing this entry. The status SHALL
+            start with a 3 digit HTTP code (e.g. 404) and may contain the standard HTTP
+            description associated with the status code.
+          type: string
+        outcome:
+          description: An OperationOutcome containing hints and warnings produced as part
+            of processing this entry in a batch or transaction.
+          type: object
+      type: object
+      additionalProperties: true
+
+    uri:
+      pattern: "^\\S*$"
+      type: string
+      description: String of characters used to identify a name or a resource
+
+    code:
+      pattern: "^[^\\s]+( [^\\s]+)*$"
+      type: string
+      description: A string which has at least one character and no leading or trailing
+        whitespace and where there is no whitespace other than single spaces in the contents
+
+    Identifier:
+      description: An identifier - identifies some entity uniquely and unambiguously.
+        Typically this is used for business identifiers.
+      properties:
+        use:
+          description: The purpose of this identifier.
+          enum:
+          - usual
+          - official
+          - temp
+          - secondary
+          - old
+      system:
+        description: Establishes the namespace for the value - that is, an absolute URL that describes a set values that are unique.
+        "$ref": "#/components/schemas/uri"
+      value:
+        description: The portion of the identifier typically relevant to the user and
+          which is unique within the context of the system.
+        type: string
+      type: object
+      additionalProperties: true

@@ -11,7 +11,7 @@ from aced_submission import NaturalOrderGroup
 from aced_submission.meta_flat_load import read_ndjson, write_bulk_http, DEFAULT_ELASTIC
 
 
-@click.group(cls=NaturalOrderGroup, name='fhir')
+@click.group(cls=NaturalOrderGroup, name="fhir")
 def fhir_store():
     """Adds, retrieves, and deletes FHIR resources in a FHIR store."""
     pass
@@ -19,29 +19,37 @@ def fhir_store():
 
 def resource_generator(project_id, file_path):
     """Yield FHIR resources from a ndjson file."""
-    program, project = project_id.split('-')
+    program, project = project_id.split("-")
     assert program, "program is required"
     assert project, "project is required"
 
     for _ in read_ndjson(file_path):
-        assert 'id' in _, f"resource {_} does not have an 'id'"
-        assert 'resourceType' in _, f"resource {_} does not have a 'resourceType'"
+        assert "id" in _, f"resource {_} does not have an 'id'"
+        assert "resourceType" in _, f"resource {_} does not have a 'resourceType'"
         _["auth_resource_path"] = f"/programs/{program}/projects/{project}"
         yield _
 
+
 def fhir_put(project_id, path, elastic_url) -> list[str]:
     """Upsert FHIR resources to a FHIR store."""
-    assert project_id.count('-') == 1, f"{project_id} should have a single '-' separating program and project"
+    assert (
+        project_id.count("-") == 1
+    ), f"{project_id} should have a single '-' separating program and project"
 
     elastic = Elasticsearch([elastic_url], request_timeout=120)
 
-    index = doc_type ='fhir'
+    index = doc_type = "fhir"
     limit = None
     logs = []
-    for file_path in pathlib.Path(path).glob('*.ndjson'):
-
-        write_bulk_http(elastic=elastic, index=index, doc_type=doc_type, limit=limit,
-                        generator=resource_generator(project_id, file_path), schema=None)
+    for file_path in pathlib.Path(path).glob("*.ndjson"):
+        write_bulk_http(
+            elastic=elastic,
+            index=index,
+            doc_type=doc_type,
+            limit=limit,
+            generator=resource_generator(project_id, file_path),
+            schema=None,
+        )
 
         logs.append(f"wrote {file_path} to {elastic_url}/{index}")
 
@@ -50,14 +58,16 @@ def fhir_put(project_id, path, elastic_url) -> list[str]:
 
 def fhir_get(project_id, path, elastic_url) -> list[str]:
     """Retrieve FHIR resources from FHIR store, write to path/resourceType.ndjson."""
-    assert project_id.count('-') == 1, f"{project_id} should have a single '-' separating program and project"
-    program, project = project_id.split('-')
+    assert (
+        project_id.count("-") == 1
+    ), f"{project_id} should have a single '-' separating program and project"
+    program, project = project_id.split("-")
     assert program, "program is required"
     assert project, "project is required"
 
     elastic = Elasticsearch([elastic_url], request_timeout=120)
 
-    index = doc_type = 'fhir'
+    index = doc_type = "fhir"
     logs = []
 
     emitters = {}
@@ -69,19 +79,23 @@ def fhir_get(project_id, path, elastic_url) -> list[str]:
         """Maintain has of open files."""
         if resource_type not in emitters:
             file_path = pathlib.Path(path) / f"{_resource_type}.ndjson"
-            emitters[_resource_type] = file_path.open('w')
+            emitters[_resource_type] = file_path.open("w")
             open_files.append(file_path)
         return emitters[_resource_type]
 
     auth_resource_path = f"/programs/{program}/projects/{project}"
 
-    res = elastic.search(index=index, doc_type=doc_type, body={"query": {"match": {"auth_resource_path": auth_resource_path}}})
-    for _ in res['hits']['hits']:
-        resource_type = _['_source']['resourceType']
+    res = elastic.search(
+        index=index,
+        doc_type=doc_type,
+        body={"query": {"match": {"auth_resource_path": auth_resource_path}}},
+    )
+    for _ in res["hits"]["hits"]:
+        resource_type = _["_source"]["resourceType"]
         _file = _emitter(resource_type)
-        del _['_source']['auth_resource_path']
-        json.dump(_['_source'], _file)
-        _file.write('\n')
+        del _["_source"]["auth_resource_path"]
+        json.dump(_["_source"], _file)
+        _file.write("\n")
 
     for file in emitters.values():
         file.close()
@@ -91,15 +105,19 @@ def fhir_get(project_id, path, elastic_url) -> list[str]:
     return logs
 
 
-@fhir_store.command(name='put')
-@click.option('--project_id', required=True, show_default=True,
-              help="Gen3 program-project")
-@click.option('--format', 'output_format',
-              default='yaml',
-              show_default=True,
-              type=click.Choice(['yaml', 'json'], case_sensitive=False))
-@click.option('--elastic_url', default=DEFAULT_ELASTIC, show_default=True)
-@click.argument('path', default=None, required=True)
+@fhir_store.command(name="put")
+@click.option(
+    "--project_id", required=True, show_default=True, help="Gen3 program-project"
+)
+@click.option(
+    "--format",
+    "output_format",
+    default="yaml",
+    show_default=True,
+    type=click.Choice(["yaml", "json"], case_sensitive=False),
+)
+@click.option("--elastic_url", default=DEFAULT_ELASTIC, show_default=True)
+@click.argument("path", default=None, required=True)
 def _fhir_put(project_id, output_format, path, elastic_url):
     """Upsert FHIR resources to a FHIR store.
 
@@ -107,29 +125,32 @@ def _fhir_put(project_id, output_format, path, elastic_url):
     PATH: directory containing ndjson files
     """
     logs = fhir_put(project_id, path, elastic_url)
-    if output_format == 'yaml':
+    if output_format == "yaml":
         yaml.dump(logs, sys.stdout, default_flow_style=False)
     else:
         json.dump(logs, sys.stdout, indent=2)
 
 
-
-@fhir_store.command(name='get')
-@click.option('--project_id', required=True, show_default=True,
-              help="Gen3 program-project")
-@click.option('--format', 'output_format',
-             default='yaml',
-             show_default=True,
-             type=click.Choice(['yaml', 'json'], case_sensitive=False))
-@click.option('--elastic_url', default=DEFAULT_ELASTIC, show_default=True)
-@click.argument('path', default=None, required=True)
+@fhir_store.command(name="get")
+@click.option(
+    "--project_id", required=True, show_default=True, help="Gen3 program-project"
+)
+@click.option(
+    "--format",
+    "output_format",
+    default="yaml",
+    show_default=True,
+    type=click.Choice(["yaml", "json"], case_sensitive=False),
+)
+@click.option("--elastic_url", default=DEFAULT_ELASTIC, show_default=True)
+@click.argument("path", default=None, required=True)
 def _fhir_get(project_id, output_format, path, elastic_url):
     """Exports all resources for project_id to a directory.
     \b
     PATH: directory to write ndjson files
     """
     logs = fhir_get(project_id, path, elastic_url)
-    if output_format == 'yaml':
+    if output_format == "yaml":
         yaml.dump(logs, sys.stdout, default_flow_style=False)
     else:
         json.dump(logs, sys.stdout, indent=2)

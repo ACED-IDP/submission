@@ -33,3 +33,7 @@ elasticsearch<7.14.0
 # gdc
 dictionaryutils
 gen3datamodel<3.0.2
+
+fastapi
+uvicorn[standard]
+iceberg-tools

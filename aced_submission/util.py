@@ -10,7 +10,7 @@ from fhir.resources.fhirresourcemodel import FHIRResourceModel
 from pydantic import ValidationError
 import logging
 
-FHIR_CLASSES = importlib.import_module('fhir.resources')
+FHIR_CLASSES = importlib.import_module("fhir.resources")
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ParseResult:
     """Results of FHIR validation of dict."""
+
     resource: FHIRResourceModel
     """If valid, the FHIR resource."""
     exception: Exception
@@ -31,17 +32,21 @@ class ParseResult:
 
 
 def parse_obj(resource: Dict, validate=True) -> ParseResult:
-    """Load a dictionary into a FHIR model """
+    """Load a dictionary into a FHIR model"""
     try:
-        assert 'resourceType' in resource, "Dict missing `resourceType`, is it a FHIR dict?"
-        klass = FHIR_CLASSES.get_fhir_model_class(resource['resourceType'])
+        assert (
+            "resourceType" in resource
+        ), "Dict missing `resourceType`, is it a FHIR dict?"
+        klass = FHIR_CLASSES.get_fhir_model_class(resource["resourceType"])
         _ = klass.parse_obj(resource)
         if validate:
             # trigger object traversal, see monkey patch below, at bottom of file
             _.dict()
         return ParseResult(resource=_, exception=None, path=None, resource_id=_.id)
     except (ValidationError, AssertionError) as e:
-        return ParseResult(resource=None, exception=e, path=None, resource_id=resource.get('id', None))
+        return ParseResult(
+            resource=None, exception=e, path=None, resource_id=resource.get("id", None)
+        )
 
 
 def _is_ndjson(file_path: pathlib.Path) -> bool:
@@ -59,7 +64,7 @@ def _is_ndjson(file_path: pathlib.Path) -> bool:
 
 def _to_file(file_path):
     """Open file appropriately."""
-    if file_path.name.endswith('gz'):
+    if file_path.name.endswith("gz"):
         fp = io.TextIOWrapper(io.BufferedReader(gzip.GzipFile(file_path)))  # noqa
     else:
         fp = open(file_path, "rb")
@@ -68,9 +73,9 @@ def _to_file(file_path):
 
 def _is_json_file(name: str) -> bool:
     """Files we are interested in"""
-    if name.endswith('json.gz'):
+    if name.endswith("json.gz"):
         return True
-    if name.endswith('json'):
+    if name.endswith("json"):
         return True
     return False
 
@@ -79,7 +84,9 @@ def _has_entries(_: ParseResult):
     """"""
     if _.resource is None:
         return False
-    return _.resource.resource_type in ["Bundle", "List"] and _.resource.entry is not None
+    return (
+        _.resource.resource_type in ["Bundle", "List"] and _.resource.entry is not None
+    )
 
 
 def _entry_iterator(parse_result: ParseResult) -> Iterator[ParseResult]:
@@ -93,17 +100,25 @@ def _entry_iterator(parse_result: ParseResult) -> Iterator[ParseResult]:
             for _ in parse_result.resource.entry:
                 if _ is None:
                     break
-                if hasattr(_, 'resource'):  # BundleEntry
-                    yield ParseResult(path=_path, resource=_.resource, offset=offset, exception=None)
-                elif hasattr(_, 'item'):  # ListEntry
-                    yield ParseResult(path=_path, resource=_.item, offset=offset, exception=None)
+                if hasattr(_, "resource"):  # BundleEntry
+                    yield ParseResult(
+                        path=_path, resource=_.resource, offset=offset, exception=None
+                    )
+                elif hasattr(_, "item"):  # ListEntry
+                    yield ParseResult(
+                        path=_path, resource=_.item, offset=offset, exception=None
+                    )
                 else:
-                    yield ParseResult(path=_path, resource=_.item, offset=offset, exception=None)
+                    yield ParseResult(
+                        path=_path, resource=_.item, offset=offset, exception=None
+                    )
                 offset += 1
     pass
 
 
-def directory_reader(directory_path: pathlib.Path, pattern: str = '*.*', validate=True) -> Iterator[ParseResult]:
+def directory_reader(
+    directory_path: pathlib.Path, pattern: str = "*.*", validate=True
+) -> Iterator[ParseResult]:
     """Extract FHIR resources from directory"""
 
     assert directory_path.is_dir(), f"{directory_path.name} is not a directory"

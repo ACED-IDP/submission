@@ -7,6 +7,7 @@ import click
 
 class NaturalOrderGroup(click.Group):
     """See https://github.com/pallets/click/issues/513."""
+
     def list_commands(self, ctx):
         return self.commands.keys()
 
@@ -14,8 +15,13 @@ class NaturalOrderGroup(click.Group):
 class EmitterContextManager:
     """Maintain file pointers to output directory."""
 
-    def __init__(self, output_path: str, verbose=False, file_mode="w",
-                 logger=logging.getLogger("EmitterContextManager")):
+    def __init__(
+        self,
+        output_path: str,
+        verbose=False,
+        file_mode="w",
+        logger=logging.getLogger("EmitterContextManager"),
+    ):
         """Ensure output_path exists, init emitter dict."""
         output_path = pathlib.Path(output_path)
         if not output_path.exists():
@@ -33,8 +39,7 @@ class EmitterContextManager:
         self.logger = logger
 
     def __enter__(self):
-        """Ensure output_path exists, init emitter dict.
-        """
+        """Ensure output_path exists, init emitter dict."""
         return self
 
     def __exit__(self, exc_type, exc_value, exc_tb):
@@ -47,7 +52,9 @@ class EmitterContextManager:
     def emit(self, name: str) -> TextIO:
         """Maintain a hash of open files."""
         if name not in self.emitters:
-            self.emitters[name] = open(self.output_path / f"{name}.ndjson", self.file_mode)
+            self.emitters[name] = open(
+                self.output_path / f"{name}.ndjson", self.file_mode
+            )
             if self.verbose:
                 self.logger.debug(f"opened {self.emitters[name].name}")
         return self.emitters[name]

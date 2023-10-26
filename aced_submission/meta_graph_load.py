@@ -19,14 +19,14 @@ from aced_submission.pelican import DataDictionaryTraversal
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-logging.getLogger('elasticsearch').setLevel(logging.WARNING)
+logging.getLogger("elasticsearch").setLevel(logging.WARNING)
 
 LOGGED_ALREADY = []
 
 
 def _connect_to_postgres():
     """Connect to postgres based on environmental variables."""
-    return psycopg2.connect('')
+    return psycopg2.connect("")
 
 
 def _init_dictionary(root_dir_=None, dictionary_url=None):
@@ -42,22 +42,28 @@ def _init_dictionary(root_dir_=None, dictionary_url=None):
 
 def _table_mappings(dictionary_path, dictionary_url):
     """Gen3 vertex/edge table mappings."""
-    _dictionary, model = _init_dictionary(root_dir_=dictionary_path, dictionary_url=dictionary_url)
+    _dictionary, model = _init_dictionary(
+        root_dir_=dictionary_path, dictionary_url=dictionary_url
+    )
     ddt = DataDictionaryTraversal(model)
     desired_keys = [
-        '__dst_class__',
-        '__dst_src_assoc__',
-        '__dst_table__',
-        '__label__',
-        '__src_class__',
-        '__src_dst_assoc__',
-        '__src_table__',
-        '__tablename__'
+        "__dst_class__",
+        "__dst_src_assoc__",
+        "__dst_table__",
+        "__label__",
+        "__src_class__",
+        "__src_dst_assoc__",
+        "__src_table__",
+        "__tablename__",
     ]
 
     def _transform(ddt_) -> List[dict]:
         for d in ddt_.get_edges():
-            yield {k.replace('_', ''): v for k, v in d.__dict__.items() if k in desired_keys}
+            yield {
+                k.replace("_", ""): v
+                for k, v in d.__dict__.items()
+                if k in desired_keys
+            }
 
     mapping = _transform(ddt)
     return mapping
@@ -73,25 +79,39 @@ def load_vertices(files, connection, dependency_order, project_id, mapping):
     """Load files into database vertices."""
     logger.info(f"Number of files available for load: {len(files)}")
     for entity_name in dependency_order:
-        path = next(iter([fn for fn in files if str(fn).endswith(f"{entity_name}.ndjson")]), None)
+        path = next(
+            iter([fn for fn in files if str(fn).endswith(f"{entity_name}.ndjson")]),
+            None,
+        )
         if not path:
             logger.warning(f"No file found for {entity_name} skipping")
             continue
         data_table_name = next(
             iter(
-                set([m['dsttable'] for m in mapping if m['dstclass'].lower() == entity_name.lower()] +
-                    [m['srctable'] for m in mapping if m['srcclass'].lower() == entity_name.lower()])
+                set(
+                    [
+                        m["dsttable"]
+                        for m in mapping
+                        if m["dstclass"].lower() == entity_name.lower()
+                    ]
+                    + [
+                        m["srctable"]
+                        for m in mapping
+                        if m["srcclass"].lower() == entity_name.lower()
+                    ]
+                )
             ),
-            None)
+            None,
+        )
         if not data_table_name:
             logger.warning(f"No mapping found for {entity_name} skipping")
             continue
         logger.info(f"loading {path} into {data_table_name}")
 
-        columns = ['node_id', '_props', 'acl', '_sysan', 'created']
+        columns = ["node_id", "_props", "acl", "_sysan", "created"]
         # Select only columns to be updated (in my case, all non-id columns)
         # update_set = ", ".join([f"{v}=EXCLUDED.{v}" for v in ['_props', 'acl', '_sysan', 'created']])
-        update_set = ' _props=EXCLUDED._props, acl=EXCLUDED.acl, _sysan=EXCLUDED._sysan, created=EXCLUDED.created '
+        update_set = " _props=EXCLUDED._props, acl=EXCLUDED.acl, _sysan=EXCLUDED._sysan, created=EXCLUDED.created "
 
         with connection.cursor() as cursor:
             with open(path) as f:
@@ -110,25 +130,31 @@ def load_vertices(files, connection, dependency_order, project_id, mapping):
                     for line in lines:
                         record_count += 1
                         d_ = json.loads(line)
-                        d_['object']['project_id'] = project_id
-                        obj_str = json.dumps(d_['object'])
-                        _csv = f"{d_['id']}\t{obj_str}\t{{}}\t{{}}\t{datetime.now()}".replace('\n', '\\n').replace("\\",
-                                                                                                                   "\\\\")
-                        _csv = _csv + '\n'
+                        d_["object"]["project_id"] = project_id
+                        obj_str = json.dumps(d_["object"])
+                        _csv = f"{d_['id']}\t{obj_str}\t{{}}\t{{}}\t{datetime.now()}".replace(
+                            "\n", "\\n"
+                        ).replace(
+                            "\\", "\\\\"
+                        )
+                        _csv = _csv + "\n"
                         buf.write(_csv)
                     buf.seek(0)
                     # efficient way to write to postgres
-                    cursor.copy_from(buf, f'tmp_{data_table_name}', sep='\t',
-                                     columns=columns)
+                    cursor.copy_from(
+                        buf, f"tmp_{data_table_name}", sep="\t", columns=columns
+                    )
                     # handle conflicts
                     cursor.execute(
                         f"""
                         INSERT INTO {data_table_name}({', '.join(columns)})
-                        SELECT  node_id, _props::jsonb, acl, _sysan, created FROM tmp_{data_table_name} 
+                        SELECT  node_id, _props::jsonb, acl, _sysan, created FROM tmp_{data_table_name}
                         ON CONFLICT (node_id) DO UPDATE SET {update_set}
                         """
                     )
-                    logger.info(f"wrote {record_count} records to {data_table_name} from {path}")
+                    logger.info(
+                        f"wrote {record_count} records to {data_table_name} from {path}"
+                    )
                     connection.commit()
         connection.commit()
 
@@ -137,7 +163,10 @@ def load_edges(files, connection, dependency_order, mapping, project_node_id):
     """Load files into database edges."""
     logger.info(f"Number of files available for load: {len(files)}")
     for entity_name in dependency_order:
-        path = next(iter([fn for fn in files if str(fn).endswith(f"{entity_name}.ndjson")]), None)
+        path = next(
+            iter([fn for fn in files if str(fn).endswith(f"{entity_name}.ndjson")]),
+            None,
+        )
         if not path:
             logger.warning(f"No file found for {entity_name} skipping")
             continue
@@ -152,17 +181,24 @@ def load_edges(files, connection, dependency_order, mapping, project_node_id):
                     buffers = defaultdict(io.StringIO)
                     for line in lines:
                         d_ = json.loads(line)
-                        relations = d_['relations']
+                        relations = d_["relations"]
 
                         # TODO - ensure only one id per type simplifier
-                        set_ = dict((v['dst_id'], v) for v in relations).values()
+                        set_ = dict((v["dst_id"], v) for v in relations).values()
                         relations = [_ for _ in set_]
 
-                        if d_['name'] in ['ResearchStudy', 'research_study']:
+                        if d_["name"] in ["ResearchStudy", "research_study"]:
                             # link the ResearchStudy to the gen3 project
-                            relations.append({"dst_id": project_node_id, "dst_name": "Project", "label": "project"})
+                            relations.append(
+                                {
+                                    "dst_id": project_node_id,
+                                    "dst_name": "Project",
+                                    "label": "project",
+                                }
+                            )
                             logger.info(
-                                f"adding project relation from project({project_node_id}) to research_study{d_['id']}")
+                                f"adding project relation from project({project_node_id}) to research_study{d_['id']}"
+                            )
 
                         if len(relations) == 0:
                             msg = f"No relations for {d_['name']}"
@@ -173,20 +209,24 @@ def load_edges(files, connection, dependency_order, mapping, project_node_id):
 
                         record_count += 1
                         for relation in relations:
-
                             # entity_name_underscore = inflection.underscore(entity_name)
-                            dst_name_camel = inflection.camelize(relation['dst_name'])
+                            dst_name_camel = inflection.camelize(relation["dst_name"])
 
                             edge_table_mapping = next(
                                 iter(
                                     [
-                                        m for m in mapping
-                                        if m['srcclass'] == entity_name and m['dstclass'] == dst_name_camel
+                                        m
+                                        for m in mapping
+                                        if m["srcclass"] == entity_name
+                                        and m["dstclass"] == dst_name_camel
                                     ]
                                 ),
-                                None
+                                None,
                             )
-                            if not edge_table_mapping and relation['dst_name'] in dependency_order:
+                            if (
+                                not edge_table_mapping
+                                and relation["dst_name"] in dependency_order
+                            ):
                                 msg = f"No mapping for src {entity_name} dst {relation['dst_name']}"
                                 if msg not in LOGGED_ALREADY:
                                     logger.warning(msg)
@@ -200,11 +240,13 @@ def load_edges(files, connection, dependency_order, mapping, project_node_id):
                                     print(msg)
                                     LOGGED_ALREADY.append(msg)
                                 continue
-                            table_name = edge_table_mapping['tablename']
+                            table_name = edge_table_mapping["tablename"]
                             # print(f"Mapping for src {entity_name} dst {relation['dst_name']} {table_name} {edge_table_mapping}")
                             buf = buffers[table_name]
                             # src_id | dst_id | acl | _sysan | _props | created |
-                            buf.write(f"{d_['id']}|{relation['dst_id']}|{{}}|{{}}|{{}}|{datetime.now()}\n")
+                            buf.write(
+                                f"{d_['id']}|{relation['dst_id']}|{{}}|{{}}|{{}}|{datetime.now()}\n"
+                            )
                     for table_name, buf in buffers.items():
                         buf.seek(0)
                         # Creates temporary empty table with same columns and types as
@@ -216,27 +258,49 @@ def load_edges(files, connection, dependency_order, mapping, project_node_id):
                             """
                         )
 
-                        columns = ['src_id', 'dst_id', 'acl', '_sysan', '_props', 'created']
-                        update_set = ", ".join([f"{v}=EXCLUDED.{v}" for v in ['acl', '_sysan', '_props', 'created']])
+                        columns = [
+                            "src_id",
+                            "dst_id",
+                            "acl",
+                            "_sysan",
+                            "_props",
+                            "created",
+                        ]
+                        update_set = ", ".join(
+                            [
+                                f"{v}=EXCLUDED.{v}"
+                                for v in ["acl", "_sysan", "_props", "created"]
+                            ]
+                        )
                         # efficient way to write to postgres
-                        cursor.copy_from(buf, f"tmp_{table_name}", sep='|',
-                                         columns=columns)
+                        cursor.copy_from(
+                            buf, f"tmp_{table_name}", sep="|", columns=columns
+                        )
                         # handle conflicts
                         cursor.execute(
                             f"""
                             INSERT INTO "{table_name}" ({', '.join(columns)})
-                            SELECT  {', '.join(columns)} FROM "tmp_{table_name}" 
+                            SELECT  {', '.join(columns)} FROM "tmp_{table_name}"
                             ON CONFLICT (src_id, dst_id) DO UPDATE SET {update_set}
                             """
                         )
                         logger.info(
-                            f"wrote {record_count} records to {table_name} from {path} {entity_name} {relation['dst_name']}")
+                            f"wrote {record_count} records to {table_name} from {path} {entity_name} {relation['dst_name']}"
+                        )
                         connection.commit()
         connection.commit()
 
 
-def meta_upload(source_path, program, project, credentials_file, silent, dictionary_path, config_path,
-                file_name_pattern='**/*.ndjson'):
+def meta_upload(
+    source_path,
+    program,
+    project,
+    credentials_file,
+    silent,
+    dictionary_path,
+    config_path,
+    file_name_pattern="**/*.ndjson",
+):
     """Copy simplified json into Gen3."""
     assert pathlib.Path(source_path).is_dir(), f"{source_path} should be a directory"
     assert pathlib.Path(config_path).is_file(), f"{config_path} should be a file"
@@ -247,8 +311,10 @@ def meta_upload(source_path, program, project, credentials_file, silent, diction
     with open(config_path) as fp:
         gen3_config = yaml.load(fp, SafeLoader)
 
-    dependency_order = [c for c in gen3_config['dependency_order'] if not c.startswith('_')]
-    dependency_order = [c for c in dependency_order if c not in ['Program', 'Project']]
+    dependency_order = [
+        c for c in gen3_config["dependency_order"] if not c.startswith("_")
+    ]
+    dependency_order = [c for c in dependency_order if c not in ["Program", "Project"]]
 
     ensure_project(program, project)
 
@@ -259,16 +325,19 @@ def meta_upload(source_path, program, project, credentials_file, silent, diction
 
     # check program/project exist
     cur = conn.cursor()
-    cur.execute("select node_id, _props from \"node_program\";")
+    cur.execute('select node_id, _props from "node_program";')
     programs = cur.fetchall()
-    programs = [{'node_id': p[0], '_props': p[1]} for p in programs]
-    _ = next(iter([p for p in programs if p['_props']['name'] == program]), None)
+    programs = [{"node_id": p[0], "_props": p[1]} for p in programs]
+    _ = next(iter([p for p in programs if p["_props"]["name"] == program]), None)
     assert _, f"{program} not found in node_program table"
-    cur.execute("select node_id, _props from \"node_project\";")
+    cur.execute('select node_id, _props from "node_project";')
     projects = cur.fetchall()
-    projects = [{'node_id': p[0], '_props': p[1]} for p in projects]
+    projects = [{"node_id": p[0], "_props": p[1]} for p in projects]
     project_code = project
-    project_node_id = next(iter([p['node_id'] for p in projects if p['_props']['code'] == project_code]), None)
+    project_node_id = next(
+        iter([p["node_id"] for p in projects if p["_props"]["code"] == project_code]),
+        None,
+    )
     assert project_node_id, f"{project} not found in node_project"
     project_id = f"{program}-{project}"
     logger.info(f"Program and project exist: {project_id} {project_node_id}")
@@ -280,8 +349,8 @@ def meta_upload(source_path, program, project, credentials_file, silent, diction
     assert len(files) > 0, f"No files found at {input_path}/{file_name_pattern}"
 
     # check the mappings
-    dictionary_dir = dictionary_path if 'http' not in dictionary_path else None
-    dictionary_url = dictionary_path if 'http' in dictionary_path else None
+    dictionary_dir = dictionary_path if "http" not in dictionary_path else None
+    dictionary_url = dictionary_path if "http" in dictionary_path else None
     mappings = [mapping for mapping in _table_mappings(dictionary_dir, dictionary_url)]
 
     # load the files
@@ -307,45 +376,68 @@ def ensure_project(program, project) -> bool:
 
     # check program/project exist
     cur = conn.cursor()
-    cur.execute("select node_id, _props from \"node_program\";")
+    cur.execute('select node_id, _props from "node_program";')
     programs = cur.fetchall()
-    programs = [{'node_id': p[0], '_props': p[1]} for p in programs]
-    _ = next(iter([p for p in programs if p['_props']['name'] == program]), None)
+    programs = [{"node_id": p[0], "_props": p[1]} for p in programs]
+    _ = next(iter([p for p in programs if p["_props"]["name"] == program]), None)
     program_node_id = None
     if not _:  # program does not exist
         logger.info(f"Program {program} does not exist")
         program_node_id = str(uuid.uuid5(PROGRAM_SEED, program))
         cur.execute(
             "INSERT INTO node_program(node_id, _props) VALUES (%s, %s) ON CONFLICT DO NOTHING",
-            (program_node_id, json.dumps({'name': program, 'type': 'program', "dbgap_accession_number": program}))
+            (
+                program_node_id,
+                json.dumps(
+                    {
+                        "name": program,
+                        "type": "program",
+                        "dbgap_accession_number": program,
+                    }
+                ),
+            ),
         )
         conn.commit()
         logger.info(f"Created Program {program}: {program_node_id}")
     else:
-        program_node_id = _['node_id']
+        program_node_id = _["node_id"]
         logger.info(f"Program {program} exists: {program_node_id}")
 
-    cur.execute("select node_id, _props from \"node_project\";")
+    cur.execute('select node_id, _props from "node_project";')
     projects = cur.fetchall()
-    projects = [{'node_id': p[0], '_props': p[1]} for p in projects]
+    projects = [{"node_id": p[0], "_props": p[1]} for p in projects]
     project_code = project
-    project_node_id = next(iter([p['node_id'] for p in projects if p['_props']['code'] == project_code]), None)
+    project_node_id = next(
+        iter([p["node_id"] for p in projects if p["_props"]["code"] == project_code]),
+        None,
+    )
     if not project_node_id:  # project does not exist
         logger.info(f"Project {project_code} does not exist")
         project_node_id = str(uuid.uuid5(PROJECT_SEED, project))
         cur.execute(
             "INSERT INTO node_project(node_id, _props) VALUES (%s, %s) ON CONFLICT DO NOTHING",
-            (project_node_id,
-             json.dumps({'code': project, 'type': 'project', "state": "open", "dbgap_accession_number": project}))
+            (
+                project_node_id,
+                json.dumps(
+                    {
+                        "code": project,
+                        "type": "project",
+                        "state": "open",
+                        "dbgap_accession_number": project,
+                    }
+                ),
+            ),
         )
         conn.commit()
         logger.info(f"Created Project {project}: {project_node_id}")
         cur.execute(
             "INSERT INTO edge_projectmemberofprogram(src_id, dst_id)  VALUES (%s, %s) ON CONFLICT DO NOTHING",
-            (project_node_id, program_node_id)
+            (project_node_id, program_node_id),
         )
         conn.commit()
-        logger.info(f"Created edge_projectmemberofprogram between {project_node_id} -> {program_node_id}")
+        logger.info(
+            f"Created edge_projectmemberofprogram between {project_node_id} -> {program_node_id}"
+        )
 
     project_id = f"{program}-{project}"
     logger.info(f"Program and project exist: {project_id} {project_node_id}")
