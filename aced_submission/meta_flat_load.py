@@ -27,7 +27,7 @@ logging.getLogger('elasticsearch').setLevel(logging.WARNING)
 
 DEFAULT_ELASTIC = "http://localhost:9200"
 
-k8s_elastic = os.environ.get('ELASTICSEARCH_PORT', None)
+k8s_elastic = os.environ.get('GEN3_ELASTICSEARCH_MASTER_PORT', None)
 if k8s_elastic:
     DEFAULT_ELASTIC = f"http://{k8s_elastic.replace('tcp://', '')}"
 
@@ -132,7 +132,7 @@ def create_index_from_source(_schema, _index, _type):
 
     return {
         # https://www.elastic.co/guide/en/elasticsearch/reference/current/dynamic.html#dynamic-parameters
-        "mappings": {_type: {"properties": mappings, 'dynamic_templates': dynamic_templates}}
+        "mappings": {"properties": mappings, 'dynamic_templates': dynamic_templates}
     }
 
 
@@ -209,7 +209,6 @@ def create_indexes(_schema, _index, doc_type, elastic=DEFAULT_ELASTIC):
         "url": f'{elastic}/{_index}',
         "json": create_index_from_source(_schema, _index, doc_type),
         "index": _index,
-        "type": doc_type
     }
 
 
@@ -235,7 +234,6 @@ def write_bulk_http(elastic, index, limit, doc_type, generator, schema):
             yield {
                 '_index': index,
                 '_op_type': 'index',
-                '_type': doc_type,
                 '_source': dict_,
                 # use the id from the FHIR object to upsert information
                 '_id': dict_['id']
@@ -253,7 +251,7 @@ def write_bulk_http(elastic, index, limit, doc_type, generator, schema):
             elastic.indices.create(index=index_dict['index'], body=index_dict['json'])
         except Exception as e:
             if 'resource_already_exists_exception' in str(e):
-                logger.debug(f"Could not create index. {index} {str(e)}")
+                logger.debug(f"Index already exists. {index} {str(e)}")
                 logger.debug("Continuing to load.")
             else:
                 raise e
@@ -395,11 +393,9 @@ def setup_aliases(alias, doc_type, elastic, field_array, index):
     try:
         mapping = {
             "mappings": {
-                "_doc": {
-                    "properties": {
-                        "timestamp": {"type": "date"},
-                        "array": {"type": "keyword"},
-                    }
+                "properties": {
+                    "timestamp": {"type": "date"},
+                    "array": {"type": "keyword"},
                 }
             }
         }
@@ -409,7 +405,7 @@ def setup_aliases(alias, doc_type, elastic, field_array, index):
         logger.warning("Continuing to load.")
 
     try:
-        elastic.create(alias_index, id=alias, doc_type='_doc',
+        elastic.create(alias_index, id=alias,
                        body={"timestamp": datetime.now().isoformat(), "array": field_array})
     except elasticsearch.exceptions.ConflictError:
         pass
