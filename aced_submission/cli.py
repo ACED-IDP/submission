@@ -22,6 +22,7 @@ cli.add_command(meta)
 cli.add_command(files)
 cli.add_command(fhir_store)
 
+
 @cli.command(name='schema-publish')
 @click.argument('dictionary_path', default='iceberg/schemas/gen3/aced.json')
 @click.option('--bucket', default="s3://aced-public", help="Bucket target", show_default=True)
