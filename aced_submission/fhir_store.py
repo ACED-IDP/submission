@@ -58,7 +58,7 @@ def fhir_get(project_id, path, elastic_url) -> list[str]:
 
     elastic = Elasticsearch([elastic_url], request_timeout=120)
 
-    index = doc_type = 'fhir'
+    index = 'fhir'
     logs = []
 
     emitters = {}
@@ -76,7 +76,7 @@ def fhir_get(project_id, path, elastic_url) -> list[str]:
 
     auth_resource_path = f"/programs/{program}/projects/{project}"
 
-    res = elastic.search(index=index, doc_type=doc_type, body={"query": {"match": {"auth_resource_path": auth_resource_path}}})
+    res = elastic.search(index=index, body={"query": {"match": {"auth_resource_path": auth_resource_path}}})
     for _ in res['hits']['hits']:
         resource_type = _['_source']['resourceType']
         _file = _emitter(resource_type)
