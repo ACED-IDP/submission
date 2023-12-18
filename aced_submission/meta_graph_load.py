@@ -124,7 +124,7 @@ def load_vertices(files, connection, dependency_order, project_id, mapping):
                     cursor.execute(
                         f"""
                         INSERT INTO {data_table_name}({', '.join(columns)})
-                        SELECT  node_id, _props::jsonb, acl, _sysan, created FROM tmp_{data_table_name} 
+                        SELECT  node_id, _props::jsonb, acl, _sysan, created FROM tmp_{data_table_name}
                         ON CONFLICT (node_id) DO UPDATE SET {update_set}
                         """
                     )
@@ -225,7 +225,7 @@ def load_edges(files, connection, dependency_order, mapping, project_node_id):
                         cursor.execute(
                             f"""
                             INSERT INTO "{table_name}" ({', '.join(columns)})
-                            SELECT  {', '.join(columns)} FROM "tmp_{table_name}" 
+                            SELECT  {', '.join(columns)} FROM "tmp_{table_name}"
                             ON CONFLICT (src_id, dst_id) DO UPDATE SET {update_set}
                             """
                         )

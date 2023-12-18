@@ -29,13 +29,14 @@ def resource_generator(project_id, file_path):
         _["auth_resource_path"] = f"/programs/{program}/projects/{project}"
         yield _
 
+
 def fhir_put(project_id, path, elastic_url) -> list[str]:
     """Upsert FHIR resources to a FHIR store."""
     assert project_id.count('-') == 1, f"{project_id} should have a single '-' separating program and project"
 
     elastic = Elasticsearch([elastic_url], request_timeout=120)
 
-    index = doc_type ='fhir'
+    index = doc_type = 'fhir'
     limit = None
     logs = []
     for file_path in pathlib.Path(path).glob('*.ndjson'):
@@ -57,7 +58,7 @@ def fhir_get(project_id, path, elastic_url) -> list[str]:
 
     elastic = Elasticsearch([elastic_url], request_timeout=120)
 
-    index = doc_type = 'fhir'
+    index = 'fhir'
     logs = []
 
     emitters = {}
@@ -75,7 +76,7 @@ def fhir_get(project_id, path, elastic_url) -> list[str]:
 
     auth_resource_path = f"/programs/{program}/projects/{project}"
 
-    res = elastic.search(index=index, doc_type=doc_type, body={"query": {"match": {"auth_resource_path": auth_resource_path}}})
+    res = elastic.search(index=index, body={"query": {"match": {"auth_resource_path": auth_resource_path}}})
     for _ in res['hits']['hits']:
         resource_type = _['_source']['resourceType']
         _file = _emitter(resource_type)
@@ -113,14 +114,13 @@ def _fhir_put(project_id, output_format, path, elastic_url):
         json.dump(logs, sys.stdout, indent=2)
 
 
-
 @fhir_store.command(name='get')
 @click.option('--project_id', required=True, show_default=True,
               help="Gen3 program-project")
 @click.option('--format', 'output_format',
-             default='yaml',
-             show_default=True,
-             type=click.Choice(['yaml', 'json'], case_sensitive=False))
+              default='yaml',
+              show_default=True,
+              type=click.Choice(['yaml', 'json'], case_sensitive=False))
 @click.option('--elastic_url', default=DEFAULT_ELASTIC, show_default=True)
 @click.argument('path', default=None, required=True)
 def _fhir_get(project_id, output_format, path, elastic_url):
