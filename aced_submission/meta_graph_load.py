@@ -325,13 +325,20 @@ def ensure_project(program, project) -> bool:
         program_node_id = _['node_id']
         logger.info(f"Program {program} exists: {program_node_id}")
 
-    cur.execute("select node_id, _props from \"node_project\";")
-    projects = cur.fetchall()
-    projects = [{'node_id': p[0], '_props': p[1]} for p in projects]
-    project_code = project
-    project_node_id = next(iter([p['node_id'] for p in projects if p['_props']['code'] == project_code]), None)
+    cur.execute(""" 
+        select node_id, _props->>'code' as code  from node_project where node_id in (select src_id  
+        from  
+        edge_projectmemberofprogram 
+        where dst_id = (select node_id from node_program where _props->>'name' = %s)) and _props->>'code' = %s ;""",
+        (program, project,)
+    )
+    project_node_id = None
+    _ = cur.fetchone()
+    if _:
+        project_node_id, _ = _
+
     if not project_node_id:  # project does not exist
-        logger.info(f"Project {project_code} does not exist")
+        logger.info(f"Project {project} does not exist")
         project_node_id = str(uuid.uuid5(PROJECT_SEED, project))
         cur.execute(
             "INSERT INTO node_project(node_id, _props) VALUES (%s, %s) ON CONFLICT DO NOTHING",
