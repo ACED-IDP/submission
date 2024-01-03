@@ -79,7 +79,15 @@ def fhir_get(project_id, path, elastic_url) -> list[str]:
 
     for _ in elasticsearch.helpers.scan(
         client=elastic,
-        query={"query": {"match": {"auth_resource_path": auth_resource_path}}},
+        query={
+          "query": {
+            "term": {
+              "auth_resource_path.keyword": {
+                "value": auth_resource_path
+              }
+            }
+          }
+        },
         index=index
     ):
         resource_type = _['_source']['resourceType']
