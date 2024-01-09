@@ -4,6 +4,7 @@ import pathlib
 import sys
 
 import click
+import elasticsearch
 import yaml
 from elasticsearch import Elasticsearch
 
@@ -76,8 +77,11 @@ def fhir_get(project_id, path, elastic_url) -> list[str]:
 
     auth_resource_path = f"/programs/{program}/projects/{project}"
 
-    res = elastic.search(index=index, body={"query": {"match": {"auth_resource_path": auth_resource_path}}})
-    for _ in res['hits']['hits']:
+    for _ in elasticsearch.helpers.scan(
+        client=elastic,
+        query={"query": {"match": {"auth_resource_path": auth_resource_path}}},
+        index=index
+    ):
         resource_type = _['_source']['resourceType']
         _file = _emitter(resource_type)
         del _['_source']['auth_resource_path']
