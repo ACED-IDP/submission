@@ -45,7 +45,7 @@ def fhir_put(project_id, path, elastic_url) -> list[str]:
         write_bulk_http(elastic=elastic, index=index, doc_type=doc_type, limit=limit,
                         generator=resource_generator(project_id, file_path), schema=None)
 
-        logs.append(f"wrote {file_path} to {elastic_url}/{index}")
+        logs.append(f"wrote {file_path} to elasticsearch/{index}")
 
     return logs
 
