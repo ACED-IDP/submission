@@ -356,3 +356,40 @@ def ensure_project(program, project) -> bool:
 
     project_id = f"{program}-{project}"
     logger.info(f"Program and project exist: {project_id} {project_node_id}")
+
+
+def empty_project(config_path, dictionary_path, program, project):
+    """Remove all nodes from metadata graph."""
+
+    config_path = pathlib.Path(config_path)
+    assert config_path.is_file()
+    with open(config_path) as fp:
+        gen3_config = yaml.load(fp, SafeLoader)
+
+    project_id = f"{program}-{project}"
+    logger.info(f"Emptying project {project_id}")
+    dependency_order = [c for c in gen3_config['dependency_order'] if not c.startswith('_')]
+    dependency_order = [c for c in dependency_order if c not in ['Program', 'Project']]
+
+    dictionary_dir = dictionary_path if 'http' not in dictionary_path else None
+    dictionary_url = dictionary_path if 'http' in dictionary_path else None
+    mappings = [mapping for mapping in _table_mappings(dictionary_dir, dictionary_url)]
+
+    conn = _connect_to_postgres()
+    for entity_name in dependency_order:
+        data_table_name = next(
+            iter(
+                set([m['dsttable'] for m in mappings if m['dstclass'].lower() == entity_name.lower()] +
+                    [m['srctable'] for m in mappings if m['srcclass'].lower() == entity_name.lower()])
+            ),
+            None)
+        if not data_table_name:
+            logger.warning(f"No mapping found for {entity_name} skipping")
+            continue
+        logger.info(f"Truncating {data_table_name} for {project_id}")
+        with conn.cursor() as cursor:
+            cursor.execute(f"DELETE FROM {data_table_name} WHERE _props->>'project_id' = %s", (project_id,))
+            conn.commit()
+
+    conn.commit()
+    logger.info(f"Done emptying project {project_id}")
