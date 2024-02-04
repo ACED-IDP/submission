@@ -62,7 +62,7 @@ def _meta_upload(source_path, project_id, credentials_file, silent, dictionary_p
 
 @graph.command(name='mapping')
 @click.option('--dictionary_path',
-              default=None,  # 'output/gen3',
+              default='https://aced-public.s3.us-west-2.amazonaws.com/aced.json',  # 'output/gen3',
               show_default=True,
               help='Path to data dictionary (path or url).')
 @click.option('--config_path',
