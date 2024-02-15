@@ -210,5 +210,3 @@ def _fhir_delete(project_id, output_format, elastic_url):
         yaml.dump(logs, sys.stdout, default_flow_style=False)
     else:
         json.dump(logs, sys.stdout, indent=2)
-
-
