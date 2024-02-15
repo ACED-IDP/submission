@@ -104,6 +104,54 @@ def fhir_get(project_id, path, elastic_url) -> list[str]:
     return logs
 
 
+def fhir_delete(project_id, elastic_url) -> list[str]:
+    """Delete FHIR resources from FHIR store based on project_id."""
+    assert project_id.count('-') == 1, f"{project_id} should have a single '-' separating program and project"
+    program, project = project_id.split('-')
+    assert program, "program is required"
+    assert project, "project is required"
+
+    elastic = Elasticsearch([elastic_url], request_timeout=120)
+
+    index = 'fhir'
+    logs = []
+
+    auth_resource_path = f"/programs/{program}/projects/{project}"
+
+    deleted_count = 0
+    actions = []
+
+    for _ in elasticsearch.helpers.scan(
+        client=elastic,
+        query={
+            "query": {
+                "term": {
+                    "auth_resource_path.keyword": {
+                        "value": auth_resource_path
+                    }
+                }
+            }
+        },
+        index=index
+    ):
+        actions.append({
+            "_op_type": "delete",
+            "_index": index,
+            "_id": _['_id']
+        })
+
+    if actions:
+        try:
+            elasticsearch.helpers.bulk(elastic, actions)
+            deleted_count += len(actions)
+        except elasticsearch.ElasticsearchException as e:
+            logs.append(f"Error deleting resources: {e}")
+
+    logs.append(f"Deleted {deleted_count} resources for project {project_id}")
+
+    return logs
+
+
 @fhir_store.command(name='put')
 @click.option('--project_id', required=True, show_default=True,
               help="Gen3 program-project")
@@ -145,3 +193,22 @@ def _fhir_get(project_id, output_format, path, elastic_url):
         yaml.dump(logs, sys.stdout, default_flow_style=False)
     else:
         json.dump(logs, sys.stdout, indent=2)
+
+
+@fhir_store.command(name='delete')
+@click.option('--project_id', required=True, show_default=True,
+              help="Gen3 program-project")
+@click.option('--format', 'output_format',
+              default='yaml',
+              show_default=True,
+              type=click.Choice(['yaml', 'json'], case_sensitive=False))
+@click.option('--elastic_url', default=DEFAULT_ELASTIC, show_default=True)
+def _fhir_delete(project_id, output_format, elastic_url):
+    """Deletes all resources for project_id"""
+    logs = fhir_delete(project_id, elastic_url)
+    if output_format == 'yaml':
+        yaml.dump(logs, sys.stdout, default_flow_style=False)
+    else:
+        json.dump(logs, sys.stdout, indent=2)
+
+
