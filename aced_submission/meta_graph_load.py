@@ -325,11 +325,11 @@ def ensure_project(program, project) -> bool:
         program_node_id = _['node_id']
         logger.info(f"Program {program} exists: {program_node_id}")
 
-    cur.execute("""
-        select node_id, _props->>'code' as code  from node_project where node_id in (select src_id
-        from
-        edge_projectmemberofprogram
-        where dst_id = (select node_id from node_program where _props->>'name' = %s)) and _props->>'code' = %s ;""",
+    cur.execute(
+        """
+        select node_id, _props->>'code' as code  from node_project where node_id in
+        (select src_id from edge_projectmemberofprogram where dst_id =
+            (select node_id from node_program where _props->>'name' = %s)) and _props->>'code' = %s ;""",
         (program, project,)
     )
     project_node_id = None
