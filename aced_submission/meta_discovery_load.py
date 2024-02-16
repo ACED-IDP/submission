@@ -18,15 +18,12 @@ def ensure_auth(refresh_file: [pathlib.Path, str] = None, validate: bool = False
     """
 
     try:
-        if 'ACCESS_TOKEN' in os.environ:
-            access_token = os.environ
-            auth = Gen3Auth(refresh_file=f"accesstoken:///{access_token}")
-
-        elif refresh_file:
+        if refresh_file:
             if isinstance(refresh_file, str):
                 refresh_file = pathlib.Path(refresh_file)
             auth = Gen3Auth(refresh_file=refresh_file.name)
-
+        elif 'ACCESS_TOKEN' in os.environ:
+            auth = Gen3Auth(refresh_file=f"accesstoken:///{os.getenv('ACCESS_TOKEN')}")
         else:
             auth = Gen3Auth()
 
@@ -35,15 +32,16 @@ def ensure_auth(refresh_file: [pathlib.Path, str] = None, validate: bool = False
             assert api_key, "refresh_access_token failed"
 
     except (requests.exceptions.ConnectionError, AssertionError) as e:
-        msg = ("Could not get access. "
-               "See https://uc-cdis.github.io/gen3-user-doc/appendices/api-gen3/#credentials-to-query-the-api. "
-               "Store the file in ~/.gen3/credentials.json or specify location with env GEN3_API_KEY "
+        msg = (f"Could not get access."
+               "See https://bit.ly/3NbKGi4, or, "
+               "store the file in ~/.gen3/credentials.json or specify location with env GEN3_API_KEY "
                f"{e}")
 
         logging.getLogger(__name__).error(msg)
         raise AssertionError(msg)
 
     return auth
+
 
 def discovery_get(project_id: str):
     """Fetches project information from discovery metadata-service"""
@@ -61,6 +59,7 @@ def discovery_get(project_id: str):
 
     return data
 
+
 def discovery_delete(project_id: str):
     """Deletes project information to discovery metadata-service"""
 
@@ -72,6 +71,7 @@ def discovery_delete(project_id: str):
         print(f"Deleted {project_id}")
     except requests.exceptions.HTTPError as e:
         print(str(e))
+
 
 def discovery_load(project_id: str, _subjects_count: int, description: str, location: str):
     """Writes project information to discovery metadata-service.
@@ -108,5 +108,3 @@ def discovery_load(project_id: str, _subjects_count: int, description: str, loca
         print(f"Added {project_id}")
     except requests.exceptions.HTTPError as e:
         print(str(e))
-
-
