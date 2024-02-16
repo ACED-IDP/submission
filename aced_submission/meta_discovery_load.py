@@ -1,5 +1,6 @@
 import os
 import pathlib
+import jwt
 import logging
 import requests
 from gen3.auth import Gen3Auth
@@ -44,42 +45,68 @@ def ensure_auth(refresh_file: [pathlib.Path, str] = None, validate: bool = False
 
     return auth
 
+def discovery_get(project_id: str):
+    """Fetches project information from discovery metadata-service"""
 
-def discovery_load(program, gen3_credentials_file):
-    """Writes project information to discovery metadata-service"""
-    auth = ensure_auth(gen3_credentials_file)
+    auth = ensure_auth()
     discovery_client = Gen3Metadata(auth.endpoint, auth)
-    # TODO - read from some other, more dynamic source
-    discovery_descriptions = """
-Alcoholism~9300~Patients from 'Coherent Data Set' https://www.mdpi.com/2079-9292/11/8/1199/htm that were diagnosed with condition(s) of: Alcoholism.  Data hosted by: aced-ohsu~aced-ohsu
-Alzheimers~45306~Patients from 'Coherent Data Set' https://www.mdpi.com/2079-9292/11/8/1199/htm that were diagnosed with condition(s) of: Alzheimer's, Familial Alzheimer's.  Data hosted by: aced-ucl~aced-ucl
-Breast_Cancer~7105~Patients from 'Coherent Data Set' https://www.mdpi.com/2079-9292/11/8/1199/htm that were diagnosed with condition(s) of: Malignant neoplasm of breast (disorder).  Data hosted by: aced-manchester~aced-manchester
-Colon_Cancer~25355~Patients from 'Coherent Data Set' https://www.mdpi.com/2079-9292/11/8/1199/htm that were diagnosed with condition(s) of: Malignant tumor of colon,  Polyp of colon.  Data hosted by: aced-stanford~aced-stanford
-Diabetes~65051~Patients from 'Coherent Data Set' https://www.mdpi.com/2079-9292/11/8/1199/htm that were diagnosed with condition(s) of: Diabetes.  Data hosted by: aced-ucl~aced-ucl
-Lung_Cancer~25355~Patients from 'Coherent Data Set' https://www.mdpi.com/2079-9292/11/8/1199/htm that were diagnosed with condition(s) of: Non-small cell carcinoma of lung,TNM stage 1,  Non-small cell lung cancer, Suspected lung cancer.  Data hosted by: aced-manchester~aced-manchester
-Prostate_Cancer~35488~Patients from 'Coherent Data Set' https://www.mdpi.com/2079-9292/11/8/1199/htm that were diagnosed with condition(s) of: Metastasis from malignant tumor of prostate, Neoplasm of prostate, arcinoma in situ of prostate.  Data hosted by: aced-stanford~aced-stanford""".split('\n')  # noqa E501
 
-    for line in discovery_descriptions:
-        if len(line) == 0:
-            continue
-        (name, _subjects_count, description, location,) = line.split('~')
-        gen3_discovery = {'tags': [
-            {"name": program, "category": "Program"},
-            {"name": f"aced_{name}", "category": "Study Registration"},
-            {"name": location, "category": "Study Location"},
+    try:
+        data = discovery_client.get(project_id)
+    except requests.exceptions.HTTPError as e:
+        print(str(e))
+        if e.response.status_code == 404:
+            return {}
+        return None
 
-        ], 'name': name, 'full_name': name, 'study_description': description}
+    return data
 
-        guid = f"aced_{name}"
+def discovery_delete(project_id: str):
+    """Deletes project information to discovery metadata-service"""
 
-        gen3_discovery['commons'] = "ACED"
-        gen3_discovery['commons_name'] = "ACED Commons"
-        # TODO - read this value for commons_url from some other, more dynamic source
-        gen3_discovery['commons_url'] = 'staging.aced-idp.org'
-        gen3_discovery['__manifest'] = 0
-        gen3_discovery['_research_subject_count'] = int(_subjects_count)
-        gen3_discovery['_unique_id'] = guid
-        gen3_discovery['study_id'] = guid
-        discoverable_data = dict(_guid_type="discovery_metadata", gen3_discovery=gen3_discovery)
-        discovery_client.create(guid, discoverable_data, aliases=None, overwrite=True)
-        print(f"Added {name}")
+    auth = ensure_auth()
+    discovery_client = Gen3Metadata(auth.endpoint, auth)
+
+    try:
+        discovery_client.delete(project_id)
+        print(f"Deleted {project_id}")
+    except requests.exceptions.HTTPError as e:
+        print(str(e))
+
+def discovery_load(project_id: str, _subjects_count: int, description: str, location: str):
+    """Writes project information to discovery metadata-service.
+       Overwrites existing data"""
+
+    program, project = project_id.split("-")
+    auth = ensure_auth()
+    token = auth.get_access_token()
+
+    # Decode the jwt ACCESS_TOKEN to get the commons endpoint
+    decoded_token = jwt.decode(token, secret=None, algorithms=["RS256"], options={"verify_signature":False})
+    commons_url = decoded_token["iss"].removesuffix("/user").removeprefix("https://")
+
+    discovery_client = Gen3Metadata(auth.endpoint, auth)
+    gen3_discovery = {'tags': [
+        {"name": program, "category": "Program"},
+        {"name": project, "category": "Project"},
+        {"name": project_id, "category": "Study Registration"},
+        {"name": location, "category": "Study Location"},
+
+    ], 'name': project, 'full_name': project, 'study_description': description}
+
+    gen3_discovery['commons'] = "ACED"
+    gen3_discovery['commons_name'] = "ACED Commons"
+    gen3_discovery['commons_url'] = commons_url
+    gen3_discovery['__manifest'] = 0
+    gen3_discovery['_research_subject_count'] = int(_subjects_count)
+    gen3_discovery['_unique_id'] = project_id
+    gen3_discovery['study_id'] = project_id
+    discoverable_data = dict(_guid_type="discovery_metadata", gen3_discovery=gen3_discovery)
+
+    try:
+        discovery_client.create(project_id, discoverable_data, aliases=None, overwrite=True)
+        print(f"Added {project_id}")
+    except requests.exceptions.HTTPError as e:
+        print(str(e))
+
+

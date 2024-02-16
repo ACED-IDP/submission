@@ -12,7 +12,7 @@ from aced_submission import NaturalOrderGroup
 from aced_submission.meta_graph_load import meta_upload, _table_mappings, _connect_to_postgres
 
 from aced_submission.meta_flat_load import cli as meta_flat_load_cli
-from aced_submission.meta_discovery_load import discovery_load
+from aced_submission.meta_discovery_load import discovery_load, discovery_delete, discovery_get
 
 LINKS = threading.local()
 CLASSES = threading.local()
@@ -38,8 +38,6 @@ def graph():
               help='Path on local file system')
 @click.option('--project_id', required=True, show_default=True,
               help='Gen3 program-project')
-@click.option('--credentials_file', default='~/.gen3/credentials.json', show_default=True,
-              help='API credentials file downloaded from gen3 profile.')
 @click.option('--silent', default=False, is_flag=True, show_default=True,
               help="No progress bar, or other output")
 @click.option('--dictionary_path',
@@ -50,13 +48,13 @@ def graph():
               default='config.yaml',
               show_default=True,
               help='Path to config file.')
-def _meta_upload(source_path, project_id, credentials_file, silent, dictionary_path, config_path):
+def _meta_upload(source_path, project_id, silent, dictionary_path, config_path):
     """Copy simplified json into sheepdog database."""
     program, project = project_id.split('-')
     assert program, "program is required"
     assert project, "project is required"
 
-    meta_upload(source_path, program, project, credentials_file, silent, dictionary_path, config_path,
+    meta_upload(source_path, program, project, silent, dictionary_path, config_path,
                 file_name_pattern='**/*.ndjson')
 
 
@@ -183,13 +181,32 @@ def discovery():
 
 
 @discovery.command('load')
-@click.option('--program', default="aced", show_default=True,
-              help='Gen3 "program"')
-@click.option('--credentials_file', default='~/.gen3/credentials.json', show_default=True,
-              help='API credentials file downloaded from gen3 profile.')
-def discovery(program, credentials_file):
+@click.option('--project_id', required=True,
+               help='The {program}-{project} project identifier for the study')
+@click.option('--subjects_count', required=True,
+               help='The number of subjects in the study.')
+@click.option('--description', required=True,
+               help='A summary description of the study.')
+@click.option('--location', required=True,
+               help='A url of a reference website associated with the study')
+def _discovery_load(project_id, subjects_count, description, location):
     """Writes project information to discovery metadata-service"""
-    discovery_load(program, credentials_file)
+    discovery_load(project_id, subjects_count, description, location)
+
+
+@discovery.command('delete')
+@click.option('--project_id', required=True,
+               help='A url of a reference website associated with the study')
+def _discovery_delete(project_id):
+    """Deletes project information from discovery metadata-service"""
+    discovery_delete(project_id)
+
+@discovery.command('get')
+@click.option('--project_id', required=True,
+    help='A url of a reference website associated with the study')
+def _discovery_get(project_id):
+    """Fetches project information from discovery metadata-service"""
+    discovery_get(project_id)
 
 
 if __name__ == '__main__':

@@ -235,7 +235,7 @@ def load_edges(files, connection, dependency_order, mapping, project_node_id):
         connection.commit()
 
 
-def meta_upload(source_path, program, project, credentials_file, silent, dictionary_path, config_path,
+def meta_upload(source_path, program, project, silent, dictionary_path, config_path,
                 file_name_pattern='**/*.ndjson'):
     """Copy simplified json into Gen3."""
     assert pathlib.Path(source_path).is_dir(), f"{source_path} should be a directory"
@@ -325,10 +325,10 @@ def ensure_project(program, project) -> bool:
         program_node_id = _['node_id']
         logger.info(f"Program {program} exists: {program_node_id}")
 
-    cur.execute(""" 
-        select node_id, _props->>'code' as code  from node_project where node_id in (select src_id  
-        from  
-        edge_projectmemberofprogram 
+    cur.execute("""
+        select node_id, _props->>'code' as code  from node_project where node_id in (select src_id
+        from
+        edge_projectmemberofprogram
         where dst_id = (select node_id from node_program where _props->>'name' = %s)) and _props->>'code' = %s ;""",
         (program, project,)
     )
