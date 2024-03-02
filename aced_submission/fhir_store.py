@@ -31,7 +31,7 @@ def resource_generator(project_id, file_path):
         yield _
 
 
-def fhir_put(project_id, path, elastic_url) -> list[str]:
+def fhir_put(project_id: str, path: str, elastic_url: str) -> list[str]:
     """Upsert FHIR resources to a FHIR store."""
     assert project_id.count('-') == 1, f"{project_id} should have a single '-' separating program and project"
 
@@ -50,7 +50,7 @@ def fhir_put(project_id, path, elastic_url) -> list[str]:
     return logs
 
 
-def fhir_get(project_id, path, elastic_url) -> list[str]:
+def fhir_get(project_id: str, path: str, elastic_url: str) -> list[str]:
     """Retrieve FHIR resources from FHIR store, write to path/resourceType.ndjson."""
     assert project_id.count('-') == 1, f"{project_id} should have a single '-' separating program and project"
     program, project = project_id.split('-')
@@ -104,7 +104,7 @@ def fhir_get(project_id, path, elastic_url) -> list[str]:
     return logs
 
 
-def fhir_delete(project_id, elastic_url) -> list[str]:
+def fhir_delete(project_id: str, elastic_url: str) -> list[str]:
     """Delete FHIR resources from FHIR store based on project_id."""
     assert project_id.count('-') == 1, f"{project_id} should have a single '-' separating program and project"
     program, project = project_id.split('-')
@@ -146,6 +146,7 @@ def fhir_delete(project_id, elastic_url) -> list[str]:
             deleted_count += len(actions)
         except elasticsearch.ElasticsearchException as e:
             logs.append(f"Error deleting resources: {e}")
+            return logs
 
     logs.append(f"Deleted {deleted_count} resources for project {project_id}")
 

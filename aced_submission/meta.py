@@ -12,7 +12,7 @@ from aced_submission import NaturalOrderGroup
 from aced_submission.meta_graph_load import meta_upload, _table_mappings, _connect_to_postgres
 
 from aced_submission.meta_flat_load import cli as meta_flat_load_cli
-from aced_submission.meta_discovery_load import discovery_load, discovery_delete, discovery_get
+from aced_submission.meta_discovery_load import discovery_load, discovery_delete, discovery_get, sync
 
 LINKS = threading.local()
 CLASSES = threading.local()
@@ -189,7 +189,9 @@ def discovery():
                help='A summary description of the study.')
 @click.option('--location', required=True,
                help='A url of a reference website associated with the study')
-def _discovery_load(project_id, subjects_count, description, location):
+@click.option('--overwrite', required=False, default=False, is_flag=True,
+                 help='Write over what is already written in the Discovery database')
+def _discovery_load(project_id, subjects_count, description, location, overwrite):
     """Writes project information to discovery metadata-service"""
     discovery_load(project_id, subjects_count, description, location)
 
@@ -208,6 +210,12 @@ def _discovery_get(project_id):
     """Fetches project information from discovery metadata-service"""
     discovery_get(project_id)
 
+
+@discovery.command('sync')
+@click.option('--overwrite', required=False, default=False, is_flag=True,
+                help='Write over what is already written in the Discovery database')
+def _sync(overwrite):
+    sync(overwrite)
 
 if __name__ == '__main__':
     meta()

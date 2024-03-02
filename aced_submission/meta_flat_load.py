@@ -681,5 +681,73 @@ def delete(project_id, index):
     print(index, elastic.delete_by_query(index=index, body=query, timeout='5m'))
 
 
+@click.option('--manifest', required=True,
+               default=None,
+               show_default=True,
+               help='A list of metadata uuids of protected data. Everything else will be deleted'
+             )
+@click.option('--index', required=False,
+                default=None,
+                show_default=True,
+                help='fhir to edit fhir store'
+              )
+@click.option('--project_id', required=True,
+               default=None,
+               show_default=True,
+               help='program-project'
+               )
+def _delete_not_in_manifest(manifest: list[str], index: str, project_id: str):
+     delete_not_in_manifest(manifest, index, project_id)
+
+def delete_not_in_manifest(manifest: list[str], index: str, project_id: str) -> list[str]:
+    """Delete all indices that do not exist in the manifest"""
+    program, project = project_id.split("-")
+    auth_resource_path = f"/programs/{program}/projects/{project}"
+
+    uuids = [line["id"] for line in manifest]
+    elastic = Elasticsearch([DEFAULT_ELASTIC], request_timeout=120)
+    logs = []
+    query = {
+        "query": {
+            "bool": {
+                "must_not": {
+                    "terms": {
+                        "id": uuids
+                    }
+                },
+                "must": {
+                    "match": {
+                        "auth_resource_path.keyword": auth_resource_path
+                    }
+                }
+            }
+        }
+    }
+
+    if index is not None and index == "fhir":
+        success, logs = wrapper_delete_by_query(elastic, "fhir", query, logs)
+    elif index is None:
+        uuids = [line["id"] for line in manifest if line["resourceType"] == "DocumentReference"]
+        logs = wrapper_delete_by_query(elastic, "file", query, logs)
+
+        uuids = [line["id"] for line in manifest if line["resourceType"] == "Observation"]
+        logs = wrapper_delete_by_query(elastic, "observation", query, logs)
+
+        uuids = [line["id"] for line in manifest if line["resourceType"] == "Patient"]
+        logs = wrapper_delete_by_query(elastic, "patient", query, logs)
+
+    return logs
+
+def wrapper_delete_by_query(elastic: Elasticsearch, index: str, query: dict, logs: list[str]) -> (list[str]):
+    try:
+        response = elastic.delete_by_query(index=index, body=query)
+        logs.append(f"Deleted: {response['deleted']}")
+        return logs
+    except elasticsearch.ElasticsearchException as e:
+        logs.append(f"Error deleting resources: {e}")
+        return logs
+
+
+
 if __name__ == '__main__':
     cli()
