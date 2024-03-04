@@ -682,22 +682,23 @@ def delete(project_id, index):
 
 
 @click.option('--manifest', required=True,
-               default=None,
-               show_default=True,
-               help='A list of metadata uuids of protected data. Everything else will be deleted'
-             )
+              default=None,
+              show_default=True,
+              help='A list of metadata uuids of protected data. Everything else will be deleted'
+              )
 @click.option('--index', required=False,
-                default=None,
-                show_default=True,
-                help='fhir to edit fhir store'
+              default=None,
+              show_default=True,
+              help='fhir to edit fhir store'
               )
 @click.option('--project_id', required=True,
-               default=None,
-               show_default=True,
-               help='program-project'
-               )
+              default=None,
+              show_default=True,
+              help='program-project'
+              )
 def _delete_not_in_manifest(manifest: list[str], index: str, project_id: str):
-     delete_not_in_manifest(manifest, index, project_id)
+    delete_not_in_manifest(manifest, index, project_id)
+
 
 def delete_not_in_manifest(manifest: list[str], index: str, project_id: str) -> list[str]:
     """Delete all indices that do not exist in the manifest"""
@@ -738,6 +739,7 @@ def delete_not_in_manifest(manifest: list[str], index: str, project_id: str) -> 
 
     return logs
 
+
 def wrapper_delete_by_query(elastic: Elasticsearch, index: str, query: dict, logs: list[str]) -> (list[str]):
     try:
         response = elastic.delete_by_query(index=index, body=query)
@@ -746,7 +748,6 @@ def wrapper_delete_by_query(elastic: Elasticsearch, index: str, query: dict, log
     except elasticsearch.ElasticsearchException as e:
         logs.append(f"Error deleting resources: {e}")
         return logs
-
 
 
 if __name__ == '__main__':

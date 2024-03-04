@@ -2,7 +2,6 @@ import os
 import pathlib
 import jwt
 import logging
-import click
 import requests
 from gen3.auth import Gen3Auth
 from gen3.metadata import Gen3Metadata
@@ -60,6 +59,7 @@ def discovery_get(project_id: str):
         return None
 
     return data
+
 
 def discovery_delete(project_id: str):
     """Deletes project information to discovery metadata-service"""
@@ -120,7 +120,7 @@ def sync(overwrite: bool) -> bool:
     research_study_query = "{research_study(first: 10000000){\n    project_id\n    description\n    identifier_coding}}"
 
     """Needs to be a seperate query because research_study{_research_subject_count} query returns 0 in production"""
-    research_subjects ="{research_subject(first: 10000000){project_id}}"
+    research_subjects = "{research_subject(first: 10000000){project_id}}"
 
     study_records = submission_client.query(research_study_query)["data"]["research_study"]
     assert len(study_records) > 0
@@ -133,7 +133,6 @@ def sync(overwrite: bool) -> bool:
         project_id = item['project_id']
         project_count[project_id] = project_count.get(project_id, 0) + 1
 
-
     for study in study_records:
 
         if study["project_id"] not in project_count:
@@ -143,5 +142,3 @@ def sync(overwrite: bool) -> bool:
         discovery_load(study["project_id"], project_count[study["project_id"]], study["description"], study["identifier_coding"][0], overwrite)
 
     return True
-
-

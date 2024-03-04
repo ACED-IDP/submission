@@ -182,15 +182,15 @@ def discovery():
 
 @discovery.command('load')
 @click.option('--project_id', required=True,
-               help='The {program}-{project} project identifier for the study')
+              help='The {program}-{project} project identifier for the study')
 @click.option('--subjects_count', required=True,
-               help='The number of subjects in the study.')
+              help='The number of subjects in the study.')
 @click.option('--description', required=True,
-               help='A summary description of the study.')
+              help='A summary description of the study.')
 @click.option('--location', required=True,
-               help='A url of a reference website associated with the study')
+              help='A url of a reference website associated with the study')
 @click.option('--overwrite', required=False, default=False, is_flag=True,
-                 help='Write over what is already written in the Discovery database')
+              help='Write over what is already written in the Discovery database')
 def _discovery_load(project_id, subjects_count, description, location, overwrite):
     """Writes project information to discovery metadata-service"""
     discovery_load(project_id, subjects_count, description, location)
@@ -198,14 +198,15 @@ def _discovery_load(project_id, subjects_count, description, location, overwrite
 
 @discovery.command('delete')
 @click.option('--project_id', required=True,
-               help='A url of a reference website associated with the study')
+              help='A url of a reference website associated with the study')
 def _discovery_delete(project_id):
     """Deletes project information from discovery metadata-service"""
     discovery_delete(project_id)
 
+
 @discovery.command('get')
 @click.option('--project_id', required=True,
-    help='A url of a reference website associated with the study')
+              help='A url of a reference website associated with the study')
 def _discovery_get(project_id):
     """Fetches project information from discovery metadata-service"""
     discovery_get(project_id)
@@ -213,9 +214,10 @@ def _discovery_get(project_id):
 
 @discovery.command('sync')
 @click.option('--overwrite', required=False, default=False, is_flag=True,
-                help='Write over what is already written in the Discovery database')
+              help='Write over what is already written in the Discovery database')
 def _sync(overwrite):
     sync(overwrite)
+
 
 if __name__ == '__main__':
     meta()
