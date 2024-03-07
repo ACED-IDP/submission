@@ -358,7 +358,7 @@ def ensure_project(program, project) -> bool:
     logger.info(f"Program and project exist: {project_id} {project_node_id}")
 
 
-def empty_project(config_path, dictionary_path, program, project):
+def empty_project(program: str, project: str, dictionary_path: str, config_path: str, manifest: list[str]):
     """Remove all nodes from metadata graph."""
 
     config_path = pathlib.Path(config_path)
@@ -386,10 +386,23 @@ def empty_project(config_path, dictionary_path, program, project):
         if not data_table_name:
             logger.warning(f"No mapping found for {entity_name} skipping")
             continue
-        logger.info(f"Truncating {data_table_name} for {project_id}")
-        with conn.cursor() as cursor:
-            cursor.execute(f"DELETE FROM {data_table_name} WHERE _props->>'project_id' = %s", (project_id,))
-            conn.commit()
+
+        if manifest:
+            logger.info("Manifest delete selected")
+            uuids = [line["id"] for line in manifest]
+            query = f"""DELETE FROM {data_table_name}
+                        WHERE _props->>'id' NOT IN %s
+                        AND _props->>'project_id' = %s
+                     """
+            with conn.cursor() as cursor:
+                cursor.execute(query, (tuple(uuids), project_id))
+                conn.commit()
+
+        elif manifest is None:
+            logger.info(f"Truncating {data_table_name} for {project_id}")
+            with conn.cursor() as cursor:
+                cursor.execute(f"DELETE FROM {data_table_name} WHERE _props->>'project_id' = %s", (project_id,))
+                conn.commit()
 
     conn.commit()
     logger.info(f"Done emptying project {project_id}")
