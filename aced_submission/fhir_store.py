@@ -43,7 +43,7 @@ def fhir_put(project_id, path, elastic_url) -> list[str]:
     for file_path in pathlib.Path(path).glob('*.ndjson'):
 
         write_bulk_http(elastic=elastic, index=index, doc_type=doc_type, limit=limit,
-                        generator=resource_generator(project_id, file_path), schema=None)
+                        generator=resource_generator(project_id, file_path))
 
         logs.append(f"wrote {file_path} to elasticsearch/{index}")
 
