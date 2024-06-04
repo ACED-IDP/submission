@@ -9,7 +9,9 @@ import pathlib
 import sqlite3
 import tempfile
 import uuid
+import pandas as pd
 from datetime import datetime
+from dateutil.parser import parse
 from functools import lru_cache
 from itertools import islice
 from typing import Dict, Iterator, Any, Generator, List
@@ -193,7 +195,6 @@ def write_alias_config(doc_type, alias, elastic=DEFAULT_ELASTIC, name_space=ES_I
 def write_bulk_http(elastic, index, limit, doc_type, generator) -> None:
     """Use efficient method to write to elastic, assumes a)generator is a list of dictionaries b) indices already exist. """
     counter = 0
-
     def _bulker(generator_, counter_=counter):
         for dict_ in generator_:
             if limit and counter_ > limit:
@@ -212,7 +213,7 @@ def write_bulk_http(elastic, index, limit, doc_type, generator) -> None:
 
     logger.info(f'Writing bulk to {index} limit {limit}.')
     _ = bulk(client=elastic,
-             actions=(d for d in _bulker(generator)),
+             actions=(d for d in bulk_data),
              request_timeout=120)
 
     return
