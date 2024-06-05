@@ -35,3 +35,4 @@ dictionaryutils
 gen3datamodel<3.0.2
 PyJWT
 
+gen3_tracker>=0.0.4rc11

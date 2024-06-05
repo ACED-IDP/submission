@@ -8,7 +8,8 @@ import os
 import pathlib
 import sqlite3
 import uuid
-import pandas as pd
+import tempfile
+
 from datetime import datetime
 from dateutil.parser import parse
 from functools import lru_cache
@@ -85,7 +86,7 @@ def generate_elasticsearch_mapping(df: List[Dict]) -> Dict[str, Any]:
                 raise ValueError('Value is not a string')
             parse(value, fuzzy=True)
             return True
-        except ValueError:
+        except Exception:  # noqa
             return False
 
     def is_object_dtype(value: Any) -> bool:
@@ -211,9 +212,8 @@ def write_sqlite(index, generator):
                                    [(entity['id'], orjson.dumps(entity).decode(),) for entity in generator])
 
 
-def write_bulk_http(elastic, index, limit, doc_type, generator) -> List[Dict]:
-    """Use efficient method to write to elastic"""
-    print("ENTERING BULK HTPP LOAD")
+def write_bulk_http(elastic, index, limit, doc_type, generator) -> None:
+    """Use efficient method to write to elastic, assumes a)generator is a list of dictionaries b) indices already exist. """
     counter = 0
     def _bulker(generator_, counter_=counter):
         for dict_ in generator_:
@@ -231,48 +231,21 @@ def write_bulk_http(elastic, index, limit, doc_type, generator) -> List[Dict]:
                 logger.info(f"{counter_} records written")
         logger.info(f"{counter_} records written")
 
-    #bulk_generator = (d for d in _bulker(generator))
-    bulk_data = []
-
-    # This try except shouldn't exist here. Don't understand why it's needed
-    try:
-        for item in _bulker(generator):
-            bulk_data.append(item)
-            print("ITEM: ", item)
-    except Exception as e:
-        print("ERROR: ", str(e))
-        exit()
-
-    #print("BULK DATA: ", bulk_data)
-
-    index_dict = create_indexes(bulk_data, _index=index)
-    print("index_dict", index_dict)
-    try:
-        # Another hack trying to clear the indices to avoid 400 errors
-        # elastic.indices.delete(index=index_dict['index'], ignore=[400, 404])
-        elastic.indices.create(index=index_dict['index'], body=index_dict['json'], ignore=[400])
-    except Exception as e:
-        if 'resource_already_exists_exception' in str(e):
-            logger.debug(f"Index already exists. {index} {str(e)}")
-            logger.debug("Continuing to load.")
-        else:
-            raise e
 
     logger.info(f'Writing bulk to {index} limit {limit}.')
     _ = bulk(client=elastic,
-             actions=(d for d in bulk_data),
+             actions=(d for d in _bulker(generator)),
              request_timeout=120)
 
-    return bulk_data
+    return
 
 def observation_generator(project_id, generator) -> Iterator[Dict]:
     """Render guppy index for observation."""
     program, project = project_id.split('-')
     for observation in generator:
-        o_ = observation['object']
-        o_['project_id'] = project_id
-        o_["auth_resource_path"] = f"/programs/{program}/projects/{project}"
-        yield o_
+        observation['project_id'] = project_id
+        observation["auth_resource_path"] = f"/programs/{program}/projects/{project}"
+        yield observation
 
 
 @lru_cache(maxsize=1024 * 10)
@@ -338,7 +311,11 @@ def file_generator(project_id, generator) -> Iterator[Dict]:
 
 def setup_aliases(alias, doc_type, elastic, field_array, index):
     """Create the alias to the data index"""
-    elastic.indices.put_alias(index, alias)
+    if not elastic.indices.get_alias(alias):
+        logger.warning(f"Creating alias {alias}.")
+        elastic.indices.put_alias(index, alias)
+    else:
+        logger.info(f"Alias {alias} already exists.")
     # create a configuration index that guppy will read that describes the array fields
     # TODO - find a doc or code reference in guppy that explains how this is used
     alias_index = f'{ES_INDEX_PREFIX}_{doc_type}-array-config_0'
@@ -351,27 +328,30 @@ def setup_aliases(alias, doc_type, elastic, field_array, index):
                 }
             }
         }
-        elastic.indices.create(index=alias_index, body=mapping)
+        if not elastic.indices.exists(index=alias_index):
+            logger.warning(f"Creating index {alias_index}.")
+            elastic.indices.create(index=alias_index, body=mapping)
+            elastic.create(alias_index, id=alias,
+                           body={"timestamp": datetime.now().isoformat(), "array": field_array})
+
+            elastic.indices.update_aliases(
+                {"actions": [{"add": {"index": f"{ES_INDEX_PREFIX}_{doc_type}_0", "alias": alias}}]}
+            )
+            elastic.indices.update_aliases({
+                "actions": [
+                    {"add": {"index": f"{ES_INDEX_PREFIX}_{doc_type}-array-config_0",
+                             "alias": f"{ES_INDEX_PREFIX}_array-config"}},
+                    {"add": {"index": f"{ES_INDEX_PREFIX}_{doc_type}-array-config_0",
+                             "alias": f"{doc_type}_array-config"}}
+                ]}
+            )
+            logger.warning(f"Created index. {alias_index}")
+        else:
+            logger.warning(f"{alias_index} already exists.")
     except Exception as e:
-        logger.warning(f"Could not create index. {index} {str(e)}")
+        logger.warning(f"Could not create index. {alias_index} {str(e)}")
         logger.warning("Continuing to load.")
 
-    try:
-        elastic.create(alias_index, id=alias,
-                       body={"timestamp": datetime.now().isoformat(), "array": field_array})
-    except elasticsearch.exceptions.ConflictError:
-        pass
-    elastic.indices.update_aliases(
-        {"actions": [{"add": {"index": f"{ES_INDEX_PREFIX}_{doc_type}_0", "alias": alias}}]}
-    )
-    elastic.indices.update_aliases({
-        "actions": [
-            {"add": {"index": f"{ES_INDEX_PREFIX}_{doc_type}-array-config_0",
-                     "alias": f"{ES_INDEX_PREFIX}_array-config"}},
-            {"add": {"index": f"{ES_INDEX_PREFIX}_{doc_type}-array-config_0",
-                     "alias": f"{doc_type}_array-config"}}
-        ]}
-    )
 
 
 @click.group('flat')
@@ -458,6 +438,34 @@ def denormalize_patient(input_path):
         connection.execute('CREATE INDEX if not exists family_history_patient_id on condition(patient_id)')
 
 
+def compare_mapping(existing_mapping: Dict[str, Any], new_mapping: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Compares an existing Elasticsearch index mapping with a new mapping create update for the index by adding missing fields.
+
+    Args:
+        existing_mapping (Dict[str, Any]): The existing mapping.
+        new_mapping (Dict[str, Any]): The new mapping to compare against the existing mapping.
+
+    Returns:
+        None
+    """
+
+    new_properties = new_mapping['mappings']['properties']
+    existing_properties = existing_mapping['mappings']['properties']
+
+    # Find differences and update mapping
+    updates = {}
+    for field, field_type in new_properties.items():
+        if field not in existing_properties:
+            updates[field] = field_type
+
+    return updates
+
+def ndjson_file_generator(path):
+    """Read ndjson file line by line."""
+    with open(path) as f:
+        for l_ in f.readlines():
+            yield orjson.loads(l_)
 
 def load_flat(project_id: str, index: str, generator: Generator[dict, None, None], limit: str, elastic_url: str, output_path: str):
     """Loads flattened FHIR data into Elasticsearch database. Replaces tube-lite"""
@@ -498,12 +506,50 @@ def load_flat(project_id: str, index: str, generator: Generator[dict, None, None
 
         if not output_path:
             # create the index and write data into it.
-            observation_data = write_bulk_http(elastic=elastic, index=es_index, doc_type=doc_type, limit=limit,
-                            generator=observation_generator(project_id, generator))
 
-            print('OBSERVATION DATA: ', observation_data)
-            field_array = [k for k, v in observation_data[0].items() if 'array' in v.get('type', {})]
-            setup_aliases(alias, doc_type, elastic, field_array, index)
+            # since we need to read the generator twice, once to create the indices and once to write the data to ES
+            # Get the path of the temporary file
+            temp_path = tempfile.NamedTemporaryFile(delete=False).name
+
+            # just write the data to it
+            with open(temp_path, mode='w') as f:
+                for _ in generator:
+                    f.write(orjson.dumps(_).decode())
+                    f.write('\n')
+
+            if elastic.indices.exists(index=es_index):
+                logger.info(f"Index {es_index} exists.")
+
+                existing_mapping = elastic.indices.get_mapping(index=es_index)
+                assert es_index in existing_mapping, f"doc_type {es_index} not in {existing_mapping}"
+                existing_mapping = existing_mapping[es_index]
+
+                new_mapping = generate_elasticsearch_mapping(ndjson_file_generator(temp_path))
+                updates = compare_mapping(existing_mapping, new_mapping)
+                if updates != {}:
+                    update_body = {
+                        "properties": updates
+                    }
+                    elastic.indices.put_mapping(index=es_index, body=update_body)
+                    logger.info(f"Updated {es_index} with {updates}")
+                else:
+                    logger.info(f"No updates needed for {es_index}")
+            else:
+                logger.info(f"Index {es_index} does not exist.")
+                mapping = generate_elasticsearch_mapping(ndjson_file_generator(temp_path))
+                elastic.indices.create(index=es_index, body=mapping)
+                logger.info(f"Created {es_index}")
+
+            write_bulk_http(elastic=elastic, index=es_index, doc_type=doc_type, limit=limit,
+                            generator=observation_generator(project_id, ndjson_file_generator(temp_path)))
+
+            field_array = set()
+            for _ in ndjson_file_generator(temp_path):
+                field_array.update([k for k, v in _.items() if isinstance(v, list)])
+            field_array = list(field_array)
+            setup_aliases(alias, doc_type, elastic, field_array, es_index)
+
+            pathlib.Path(temp_path).unlink()
 
         else:
             # write file path
