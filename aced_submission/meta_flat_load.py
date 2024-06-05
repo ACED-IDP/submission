@@ -318,7 +318,7 @@ def setup_aliases(alias, doc_type, elastic, field_array, index):
         logger.info(f"Alias {alias} already exists.")
     # create a configuration index that guppy will read that describes the array fields
     # TODO - find a doc or code reference in guppy that explains how this is used
-    alias_index = f'{ES_INDEX_PREFIX}_{doc_type}-array-config_0'
+    array_config_index = f'{ES_INDEX_PREFIX}_{doc_type}-array-config_0'
     try:
         mapping = {
             "mappings": {
@@ -328,11 +328,9 @@ def setup_aliases(alias, doc_type, elastic, field_array, index):
                 }
             }
         }
-        if not elastic.indices.exists(index=alias_index):
-            logger.warning(f"Creating index {alias_index}.")
-            elastic.indices.create(index=alias_index, body=mapping)
-            elastic.create(alias_index, id=alias,
-                           body={"timestamp": datetime.now().isoformat(), "array": field_array})
+        if not elastic.indices.exists(index=array_config_index):
+            logger.warning(f"Creating index {array_config_index}.")
+            elastic.indices.create(index=array_config_index, body=mapping)
 
             elastic.indices.update_aliases(
                 {"actions": [{"add": {"index": f"{ES_INDEX_PREFIX}_{doc_type}_0", "alias": alias}}]}
@@ -345,11 +343,16 @@ def setup_aliases(alias, doc_type, elastic, field_array, index):
                              "alias": f"{doc_type}_array-config"}}
                 ]}
             )
-            logger.warning(f"Created index. {alias_index}")
+            logger.warning(f"Updated aliases {array_config_index}")
         else:
-            logger.warning(f"{alias_index} already exists.")
+            logger.warning(f"{array_config_index} already exists.")
+        elastic.index(index=array_config_index, id=alias,
+                      body={"timestamp": datetime.now().isoformat(), "array": field_array},
+                      refresh='wait_for')
+        logger.warning(f"Populated {array_config_index} field_array {field_array}")
+
     except Exception as e:
-        logger.warning(f"Could not create index. {alias_index} {str(e)}")
+        logger.warning(f"Could not create index. {array_config_index} {str(e)}")
         logger.warning("Continuing to load.")
 
 
