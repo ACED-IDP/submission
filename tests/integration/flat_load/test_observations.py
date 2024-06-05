@@ -16,7 +16,7 @@ def meta_dir() -> str:
 
 
 def test_load_observations(meta_dir, project_id, tmpdir) -> None:
-    """Ensure bundle gets created when `meta init` orphans records."""
+    """Ensure we can load observations, the ES mapping should reflect updated fields."""
     # change to the temporary directory
     print(pathlib.Path.cwd())
     print(project_id)
