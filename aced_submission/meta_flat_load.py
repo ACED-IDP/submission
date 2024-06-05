@@ -14,12 +14,12 @@ from itertools import islice
 from typing import Dict, Iterator
 
 import click
-import elasticsearch
+import opensearchpy as elasticsearch
 import orjson
 import requests
 from dictionaryutils import DataDictionary
-from elasticsearch import Elasticsearch
-from elasticsearch.helpers import bulk
+from opensearchpy import OpenSearch as Elasticsearch
+from opensearchpy.helpers import bulk
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

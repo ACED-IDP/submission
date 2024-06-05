@@ -4,9 +4,9 @@ import pathlib
 import sys
 
 import click
-import elasticsearch
+import opensearchpy as elasticsearch
 import yaml
-from elasticsearch import Elasticsearch
+from opensearchpy import OpenSearch as Elasticsearch
 
 from aced_submission import NaturalOrderGroup
 from aced_submission.meta_flat_load import read_ndjson, write_bulk_http, DEFAULT_ELASTIC
