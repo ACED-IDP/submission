@@ -311,7 +311,7 @@ def file_generator(project_id, generator) -> Iterator[Dict]:
 
 def setup_aliases(alias, doc_type, elastic, field_array, index):
     """Create the alias to the data index"""
-    if not elastic.indices.get_alias(alias):
+    if not elastic.indices.exists_alias(alias):
         logger.warning(f"Creating alias {alias}.")
         elastic.indices.put_alias(index, alias)
     else:
