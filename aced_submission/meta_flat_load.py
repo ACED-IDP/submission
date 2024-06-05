@@ -84,7 +84,8 @@ def generate_elasticsearch_mapping(df: List[Dict]) -> Dict[str, Any]:
         try:
             if not isinstance(value, str):
                 raise ValueError('Value is not a string')
-            parse(value, fuzzy=True)
+            tzinfos = {"PDT": tz.gettz('US/West')}
+            parse(value, fuzzy=True, tzinfos=tzinfos)
             return True
         except Exception:  # noqa
             return False
@@ -191,16 +192,6 @@ def write_alias_config(doc_type, alias, elastic=DEFAULT_ELASTIC, name_space=ES_I
     }
 
 
-def create_indexes(df, _index, elastic=DEFAULT_ELASTIC):
-    """Create the es indexes."""
-    return {
-        "method": 'PUT',
-        "url": f'{elastic}/{_index}',
-        "json": generate_elasticsearch_mapping(df),
-        "index": _index,
-    }
-
-
 def write_sqlite(index, generator):
     """Write to sqlite"""
     connection = sqlite3.connect(f'{index}.sqlite')
@@ -247,6 +238,13 @@ def observation_generator(project_id, generator) -> Iterator[Dict]:
         observation["auth_resource_path"] = f"/programs/{program}/projects/{project}"
         yield observation
 
+def file_generator(project_id, generator) -> Iterator[Dict]:
+     """Render guppy index for file."""
+     program, project = project_id.split('-')
+     for file in generator:
+         file['project_id'] = project_id
+         file["auth_resource_path"] = f"/programs/{program}/projects/{project}"
+         yield file
 
 @lru_cache(maxsize=1024 * 10)
 def fetch_denormalized_patient(connection, patient_id):
@@ -281,32 +279,6 @@ def fetch_denormalized_patient(connection, patient_id):
         'patient': patient, 'condition': condition, 'condition_coding': condition_coding,
         'fh_condition': fh_condition, 'fh_condition_coding': fh_condition_coding
     }
-
-
-def patient_generator(project_id, generator):
-    """Render guppy index for patient."""
-    program, project = project_id.split('-')
-    for patient in generator:
-        p_ = patient['object']
-        p_['id'] = patient['id']
-
-        p_['project_id'] = project_id
-        p_["auth_resource_path"] = f"/programs/{program}/projects/{project}"
-
-        yield p_
-
-
-def file_generator(project_id, generator) -> Iterator[Dict]:
-    """Render guppy index for file."""
-    program, project = project_id.split('-')
-    for file in generator:
-        f_ = file['object']
-        f_['id'] = file['id']
-
-        f_['project_id'] = project_id
-        f_["auth_resource_path"] = f"/programs/{program}/projects/{project}"
-
-        yield f_
 
 
 def setup_aliases(alias, doc_type, elastic, field_array, index):
@@ -480,33 +452,7 @@ def load_flat(project_id: str, index: str, generator: Generator[dict, None, None
 
     index = index.lower()
 
-
-    if index == 'patient':
-        doc_type = 'patient'
-        es_index = f"{ES_INDEX_PREFIX}_{doc_type}_0"
-        alias = 'patient'
-
-
-        if not output_path:
-            # create the index and write data into it.
-
-            patient_data = write_bulk_http(elastic=elastic, index=es_index, doc_type=doc_type, limit=limit,
-                            generator=patient_generator(project_id, generator))
-
-
-            field_array = [k for k, v in patient_data[0].items() if 'array' in v.get('type', {})]
-            setup_aliases(alias, doc_type, elastic, field_array, index)
-        else:
-            # write file path
-            write_flat_file(output_path=output_path, index=index, doc_type=doc_type, limit=limit,
-                            generator=patient_generator(project_id, generator))
-
-    if index == 'observation':
-        doc_type = 'observation'
-        es_index = f"{ES_INDEX_PREFIX}_{doc_type}_0"
-        alias = 'observation'
-
-
+    def load_index(elastic: Elasticsearch, output_path: str, es_index: str, alias: str, doc_type: str, limit: int):
         if not output_path:
             # create the index and write data into it.
 
@@ -559,23 +505,13 @@ def load_flat(project_id: str, index: str, generator: Generator[dict, None, None
             write_flat_file(output_path=output_path, index=es_index, doc_type=doc_type, limit=limit,
                             generator=observation_generator(project_id, generator))
 
-    if index == 'file':
-        doc_type = 'file'
-        alias = 'file'
-        index = f"{ES_INDEX_PREFIX}_{doc_type}_0"
-        if not output_path:
-            # create the index and write data into it.
-            file_data = write_bulk_http(elastic=elastic, index=index, doc_type=doc_type, limit=limit,
-                            generator=file_generator(project_id, generator))
+    if index == 'observation':
+        doc_type='observation'
+        load_index(elastic=elastic, output_path=output_path, es_index=f"{ES_INDEX_PREFIX}_{doc_type}_0", alias="observation", doc_type=doc_type, limit=limit)
 
-
-            field_array = [k for k, v in observation_data[0].items() if 'array' in v.get('type', {})]
-            setup_aliases(alias, doc_type, elastic, field_array, index)
-        else:
-            # write file path
-            write_flat_file(output_path=output_path, index=index, doc_type=doc_type, limit=limit,
-                            generator=file_generator(project_id, generator))
-
+    elif index == 'file':
+        doc_type='file'
+        load_index(elastic=elastic, output_path=output_path, es_index=f"{ES_INDEX_PREFIX}_{doc_type}_0", alias="file", doc_type=doc_type, limit=limit)
 
 def chunk(arr_range, arr_size):
     """Iterate in chunks."""
@@ -606,7 +542,7 @@ def counts(project_id):
             }
         }
     }
-    for index in ['patient', 'observation', 'file']:
+    for index in ['observation', 'file']:
         # index = f"{ES_INDEX_PREFIX}_{index}_0"
         print(index, elastic.count(index=index, body=query)['count'])
 
@@ -620,7 +556,7 @@ def counts(project_id):
 @click.option('--index', required=True,
               default=None,
               show_default=True,
-              help='one of patient, observation, file'
+              help='one of observation, file'
               )
 def _delete(project_id, index):
     delete(project_id, index)
