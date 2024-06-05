@@ -15,12 +15,12 @@ from itertools import islice
 from typing import Dict, Iterator, Any, Generator, List
 
 import click
-import orjson
 from dateutil.parser import parse
 from dateutil import tz
-from elasticsearch import Elasticsearch
-from elasticsearch.helpers import bulk
 from gen3_tracker.meta.dataframer import LocalFHIRDatabase
+import orjson
+from opensearchpy import OpenSearch as Elasticsearch
+from opensearchpy.helpers import bulk
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
