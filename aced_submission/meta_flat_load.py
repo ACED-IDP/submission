@@ -9,7 +9,8 @@ import pathlib
 import sqlite3
 import tempfile
 import uuid
-import pandas as pd
+import tempfile
+
 from datetime import datetime
 from dateutil.parser import parse
 from functools import lru_cache
@@ -213,11 +214,10 @@ def write_bulk_http(elastic, index, limit, doc_type, generator) -> None:
 
     logger.info(f'Writing bulk to {index} limit {limit}.')
     _ = bulk(client=elastic,
-             actions=(d for d in bulk_data),
+             actions=(d for d in _bulker(generator)),
              request_timeout=120)
 
     return
-
 
 def observation_generator(project_id, generator) -> Iterator[Dict]:
     """Render guppy index for observation."""
@@ -426,7 +426,6 @@ def compare_mapping(existing_mapping: Dict[str, Any], new_mapping: Dict[str, Any
             updates[field] = field_type
 
     return updates
-
 
 def ndjson_file_generator(path):
     """Read ndjson file line by line."""
