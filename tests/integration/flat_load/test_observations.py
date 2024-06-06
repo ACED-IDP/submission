@@ -8,7 +8,7 @@ from aced_submission.meta_flat_load import load_flat, DEFAULT_ELASTIC
 
 @pytest.fixture()
 def project_id() -> str:
-    return "test-observations"
+    return "cbds-Breast_Cancer"
 
 @pytest.fixture()
 def meta_dir() -> str:
