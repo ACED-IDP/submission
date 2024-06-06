@@ -53,9 +53,7 @@ def test_load_observations(meta_dir, project_id, tmpdir) -> None:
     results = elastic.search(index='gen3.aced.io_observation-array-config_0')
     print(results)
     assert len(results['hits']['hits']) > 0, "Expected to find array config."
-    assert len(results['hits']['hits'][0]['_source']['array']) == 0, "Expected to find no array fields."
-
-
+    assert len(results['hits']['hits'][0]['_source']['array']) == 2, "Expected to find 2 array fields."
 
     # aggregate by auth_resource_path
     # Define the query
