@@ -105,6 +105,8 @@ def generate_elasticsearch_mapping(df: List[Dict]) -> Dict[str, Any]:
          }
     ]
     mapping = {"mappings": {"properties": {}, 'dynamic_templates': dynamic_templates}}
+    # see https://github.com/uc-cdis/guppy/blob/f5bb705dae6f3417e471ba2e43ce4b61ba5026fb/src/server/schema.js#L4
+    # for the guppy schema types
     for row in df:
         for column in row.keys():
             if is_integer_dtype(row[column]):
@@ -114,7 +116,7 @@ def generate_elasticsearch_mapping(df: List[Dict]) -> Dict[str, Any]:
             elif is_bool_dtype(row[column]):
                 mapping["mappings"]["properties"][column] = {"type": "boolean"}
             elif is_datetime64_any_dtype(row[column]):
-                mapping["mappings"]["properties"][column] = {"type": "date"}
+                mapping["mappings"]["properties"][column] = {"type": "text"}
             elif is_object_dtype(row[column]):
                 if isinstance(row[column], list):
                     mapping["mappings"]["properties"][column] = {"type": "keyword"}
