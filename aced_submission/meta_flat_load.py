@@ -7,22 +7,19 @@ import logging
 import os
 import pathlib
 import sqlite3
-import uuid
 import tempfile
-
+import uuid
 from datetime import datetime
-from dateutil.parser import parse
 from functools import lru_cache
 from itertools import islice
 from typing import Dict, Iterator, Any, Generator, List
 
 import click
-import elasticsearch
 import orjson
-import requests
-from dictionaryutils import DataDictionary
+from dateutil.parser import parse
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk
+from gen3_tracker.meta.dataframer import LocalFHIRDatabase
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -115,7 +112,7 @@ def generate_elasticsearch_mapping(df: List[Dict]) -> Dict[str, Any]:
             elif is_float_dtype(row[column]):
                 mapping["mappings"]["properties"][column] = {"type": "float"}
             elif is_bool_dtype(row[column]):
-                mapping["mappings"]["properties"][column] = {"type": "boolean"}
+                mapping["mappings"]["properties"][column] = {"type": "keyword"}
             elif is_datetime64_any_dtype(row[column]):
                 mapping["mappings"]["properties"][column] = {"type": "text"}
             elif is_object_dtype(row[column]):
@@ -443,6 +440,44 @@ def ndjson_file_generator(path):
     with open(path) as f:
         for l_ in f.readlines():
             yield orjson.loads(l_)
+
+
+@cli.command('load')
+@click.option('--input_path', required=True,
+              default='META/',
+              show_default=True,
+              help='Path to flattened json'
+              )
+@click.option('--project_id', required=True,
+              default=None,
+              show_default=True,
+              help='program-project'
+              )
+@click.option('--data_type', required=True,
+              default='observation',
+              type=click.Choice(['observation', 'file'], case_sensitive=False),
+              show_default=True,
+              help='index to load[observation, file] '
+              )
+def _load_flat(input_path, project_id, data_type):
+    import tempfile
+
+    work_path = tempfile.TemporaryDirectory(delete=False).name
+    assert pathlib.Path(work_path).exists(), f"Directory {work_path} does not exist."
+    work_path = pathlib.Path(work_path)
+    db_path = (work_path / "local_fhir.db")
+    db_path.unlink(missing_ok=True)
+
+    db = LocalFHIRDatabase(db_name=db_path)
+    db.load_ndjson_from_dir(path=input_path)
+
+    load_flat(project_id=project_id,
+              generator=db.flattened_observations(),
+              index=data_type,
+              limit=None,
+              elastic_url=DEFAULT_ELASTIC,
+              output_path=None
+              )
 
 def load_flat(project_id: str, index: str, generator: Generator[dict, None, None], limit: str, elastic_url: str, output_path: str):
     """Loads flattened FHIR data into Elasticsearch database. Replaces tube-lite"""
