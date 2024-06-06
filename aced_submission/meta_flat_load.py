@@ -191,17 +191,6 @@ def write_alias_config(doc_type, alias, elastic=DEFAULT_ELASTIC, name_space=ES_I
     }
 
 
-def write_sqlite(index, generator):
-    """Write to sqlite"""
-    connection = sqlite3.connect(f'{index}.sqlite')
-    with connection:
-        connection.execute(f'DROP table IF EXISTS {index}')
-        connection.execute(f'CREATE TABLE if not exists {index} (id PRIMARY KEY, entity Text)')
-        with connection:
-            connection.executemany(f'insert into {index} values (?, ?)',
-                                   [(entity['id'], orjson.dumps(entity).decode(),) for entity in generator])
-
-
 def write_bulk_http(elastic, index, limit, doc_type, generator) -> None:
     """Use efficient method to write to elastic, assumes a)generator is a list of dictionaries b) indices already exist. """
     counter = 0
@@ -241,6 +230,7 @@ def file_generator(project_id, generator) -> Iterator[Dict]:
      """Render guppy index for file."""
      program, project = project_id.split('-')
      for file in generator:
+         print("FILE: ", file)
          file['project_id'] = project_id
          file["auth_resource_path"] = f"/programs/{program}/projects/{project}"
          yield file
@@ -482,11 +472,13 @@ def _load_flat(input_path, project_id, data_type):
 def load_flat(project_id: str, index: str, generator: Generator[dict, None, None], limit: str, elastic_url: str, output_path: str):
     """Loads flattened FHIR data into Elasticsearch database. Replaces tube-lite"""
 
+    assert index in ["observation", "file"], f"Index {index} does not have a supported generator"
+
     if limit:
         limit = int(limit)
 
     elastic = Elasticsearch([elastic_url], request_timeout=120)
-
+    assert elastic.ping(), f"Connection to {elastic_url} failed"
     index = index.lower()
 
     def load_index(elastic: Elasticsearch, output_path: str, es_index: str, alias: str, doc_type: str, limit: int):
@@ -496,12 +488,18 @@ def load_flat(project_id: str, index: str, generator: Generator[dict, None, None
             # since we need to read the generator twice, once to create the indices and once to write the data to ES
             # Get the path of the temporary file
             temp_path = tempfile.NamedTemporaryFile(delete=False).name
-
             # just write the data to it
             with open(temp_path, mode='w') as f:
                 for _ in generator:
                     f.write(orjson.dumps(_).decode())
                     f.write('\n')
+
+
+            if index== "observation":
+                loading_generator = observation_generator(project_id, ndjson_file_generator(temp_path))
+            elif index == "file":
+                loading_generator = file_generator(project_id, ndjson_file_generator(temp_path))
+
 
             if elastic.indices.exists(index=es_index):
                 logger.info(f"Index {es_index} exists.")
@@ -527,7 +525,7 @@ def load_flat(project_id: str, index: str, generator: Generator[dict, None, None
                 logger.info(f"Created {es_index}")
 
             write_bulk_http(elastic=elastic, index=es_index, doc_type=doc_type, limit=limit,
-                            generator=observation_generator(project_id, ndjson_file_generator(temp_path)))
+                            generator=loading_generator)
 
             field_array = set()
             for _ in ndjson_file_generator(temp_path):
@@ -540,7 +538,7 @@ def load_flat(project_id: str, index: str, generator: Generator[dict, None, None
         else:
             # write file path
             write_flat_file(output_path=output_path, index=es_index, doc_type=doc_type, limit=limit,
-                            generator=observation_generator(project_id, generator))
+                            generator=loading_generator)
 
     if index == 'observation':
         doc_type='observation'
