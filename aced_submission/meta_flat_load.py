@@ -10,9 +10,8 @@ import sqlite3
 import tempfile
 import uuid
 import tempfile
-
+import uuid
 from datetime import datetime
-from dateutil.parser import parse
 from functools import lru_cache
 from itertools import islice
 from typing import Dict, Iterator, Any, Generator, List
@@ -24,6 +23,8 @@ from gen3_tracker.meta.dataframer import LocalFHIRDatabase
 import orjson
 from opensearchpy import OpenSearch as Elasticsearch
 from opensearchpy.helpers import bulk
+from dateutil.parser import parse
+from gen3_tracker.meta.dataframer import LocalFHIRDatabase
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -196,6 +197,7 @@ def write_alias_config(doc_type, alias, elastic=DEFAULT_ELASTIC, name_space=ES_I
 def write_bulk_http(elastic, index, limit, doc_type, generator) -> None:
     """Use efficient method to write to elastic, assumes a)generator is a list of dictionaries b) indices already exist. """
     counter = 0
+
     def _bulker(generator_, counter_=counter):
         for dict_ in generator_:
             if limit and counter_ > limit:
@@ -219,6 +221,7 @@ def write_bulk_http(elastic, index, limit, doc_type, generator) -> None:
 
     return
 
+
 def observation_generator(project_id, generator) -> Iterator[Dict]:
     """Render guppy index for observation."""
     program, project = project_id.split('-')
@@ -232,7 +235,6 @@ def file_generator(project_id, generator) -> Iterator[Dict]:
     """Render guppy index for file."""
     program, project = project_id.split('-')
     for file in generator:
-        print("FILE: ", file)
         file['project_id'] = project_id
         file["auth_resource_path"] = f"/programs/{program}/projects/{project}"
         yield file
@@ -426,6 +428,7 @@ def compare_mapping(existing_mapping: Dict[str, Any], new_mapping: Dict[str, Any
             updates[field] = field_type
 
     return updates
+
 
 def ndjson_file_generator(path):
     """Read ndjson file line by line."""
