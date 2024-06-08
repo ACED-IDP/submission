@@ -94,12 +94,10 @@ def load_vertices(files, connection, dependency_order, project_id, mapping):
         update_set = ' _props=EXCLUDED._props, acl=EXCLUDED.acl, _sysan=EXCLUDED._sysan, created=EXCLUDED.created '
 
         with connection.cursor() as cursor:
-            print("PATH: ", path)
             with open(path) as f:
                 # copy a block of records into a file like stringIO buffer
                 record_count = 0
                 for lines in chunk(f.readlines(), 1000):
-                    print("ENTERING LINES: !!!!")
                     # Creates temporary empty table with same columns and types as
                     # the final table
                     cursor.execute(
@@ -112,7 +110,6 @@ def load_vertices(files, connection, dependency_order, project_id, mapping):
                     for line in lines:
                         record_count += 1
                         d_ = json.loads(line)
-                        print("PROJECT ID: ", project_id)
                         d_['object']['project_id'] = project_id
                         obj_str = json.dumps(d_['object'])
                         _csv = f"{d_['id']}\t{obj_str}\t{{}}\t{{}}\t{datetime.now()}".replace('\n', '\\n').replace("\\",
@@ -289,10 +286,7 @@ def meta_upload(source_path, program, project, silent, dictionary_path, config_p
 
     # load the files
     logger.info("Loading vertices")
-    try:
-        load_vertices(files, conn, dependency_order, project_id, mappings)
-    except Exception as e:
-        print("EXCEPTION: ", str(e))
+    load_vertices(files, conn, dependency_order, project_id, mappings)
 
     logger.info("Loading edges")
     load_edges(files, conn, dependency_order, mappings, project_node_id)
