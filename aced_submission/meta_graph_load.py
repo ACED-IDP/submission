@@ -286,10 +286,7 @@ def meta_upload(source_path, program, project, silent, dictionary_path, config_p
 
     # load the files
     logger.info("Loading vertices")
-    try:
-        load_vertices(files, conn, dependency_order, project_id, mappings)
-    except Exception as e:
-        print("EXCEPTION: ", str(e))
+    load_vertices(files, conn, dependency_order, project_id, mappings)
 
     logger.info("Loading edges")
     load_edges(files, conn, dependency_order, mappings, project_node_id)
