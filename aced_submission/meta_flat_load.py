@@ -17,6 +17,7 @@ from typing import Dict, Iterator, Any, Generator, List
 import click
 import orjson
 from dateutil.parser import parse
+from dateutil import tz
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk
 from gen3_tracker.meta.dataframer import LocalFHIRDatabase
@@ -89,8 +90,6 @@ def generate_elasticsearch_mapping(df: List[Dict]) -> Dict[str, Any]:
 
     def is_object_dtype(value: Any) -> bool:
         return isinstance(value, list) or isinstance(value, dict)
-
-
 
     dynamic_templates = [
          {
@@ -194,6 +193,7 @@ def write_alias_config(doc_type, alias, elastic=DEFAULT_ELASTIC, name_space=ES_I
 def write_bulk_http(elastic, index, limit, doc_type, generator) -> None:
     """Use efficient method to write to elastic, assumes a)generator is a list of dictionaries b) indices already exist. """
     counter = 0
+
     def _bulker(generator_, counter_=counter):
         for dict_ in generator_:
             if limit and counter_ > limit:
@@ -210,13 +210,13 @@ def write_bulk_http(elastic, index, limit, doc_type, generator) -> None:
                 logger.info(f"{counter_} records written")
         logger.info(f"{counter_} records written")
 
-
     logger.info(f'Writing bulk to {index} limit {limit}.')
     _ = bulk(client=elastic,
              actions=(d for d in _bulker(generator)),
              request_timeout=120)
 
     return
+
 
 def observation_generator(project_id, generator) -> Iterator[Dict]:
     """Render guppy index for observation."""
@@ -226,14 +226,16 @@ def observation_generator(project_id, generator) -> Iterator[Dict]:
         observation["auth_resource_path"] = f"/programs/{program}/projects/{project}"
         yield observation
 
+
 def file_generator(project_id, generator) -> Iterator[Dict]:
-     """Render guppy index for file."""
-     program, project = project_id.split('-')
-     for file in generator:
-         print("FILE: ", file)
-         file['project_id'] = project_id
-         file["auth_resource_path"] = f"/programs/{program}/projects/{project}"
-         yield file
+    """Render guppy index for file."""
+    program, project = project_id.split('-')
+    for file in generator:
+        print("FILE: ", file)
+        file['project_id'] = project_id
+        file["auth_resource_path"] = f"/programs/{program}/projects/{project}"
+        yield file
+
 
 @lru_cache(maxsize=1024 * 10)
 def fetch_denormalized_patient(connection, patient_id):
@@ -315,7 +317,6 @@ def setup_aliases(alias, doc_type, elastic, field_array, index):
     except Exception as e:
         logger.warning(f"Could not create index. {array_config_index} {str(e)}")
         logger.warning("Continuing to load.")
-
 
 
 @click.group('flat')
@@ -425,6 +426,7 @@ def compare_mapping(existing_mapping: Dict[str, Any], new_mapping: Dict[str, Any
 
     return updates
 
+
 def ndjson_file_generator(path):
     """Read ndjson file line by line."""
     with open(path) as f:
@@ -469,6 +471,7 @@ def _load_flat(input_path, project_id, data_type):
               output_path=None
               )
 
+
 def load_flat(project_id: str, index: str, generator: Generator[dict, None, None], limit: str, elastic_url: str, output_path: str):
     """Loads flattened FHIR data into Elasticsearch database. Replaces tube-lite"""
 
@@ -494,12 +497,10 @@ def load_flat(project_id: str, index: str, generator: Generator[dict, None, None
                     f.write(orjson.dumps(_).decode())
                     f.write('\n')
 
-
-            if index== "observation":
+            if index == "observation":
                 loading_generator = observation_generator(project_id, ndjson_file_generator(temp_path))
             elif index == "file":
                 loading_generator = file_generator(project_id, ndjson_file_generator(temp_path))
-
 
             if elastic.indices.exists(index=es_index):
                 logger.info(f"Index {es_index} exists.")
@@ -541,12 +542,13 @@ def load_flat(project_id: str, index: str, generator: Generator[dict, None, None
                             generator=loading_generator)
 
     if index == 'observation':
-        doc_type='observation'
+        doc_type = 'observation'
         load_index(elastic=elastic, output_path=output_path, es_index=f"{ES_INDEX_PREFIX}_{doc_type}_0", alias="observation", doc_type=doc_type, limit=limit)
 
     elif index == 'file':
-        doc_type='file'
+        doc_type = 'file'
         load_index(elastic=elastic, output_path=output_path, es_index=f"{ES_INDEX_PREFIX}_{doc_type}_0", alias="file", doc_type=doc_type, limit=limit)
+
 
 def chunk(arr_range, arr_size):
     """Iterate in chunks."""

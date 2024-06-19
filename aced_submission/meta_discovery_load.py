@@ -82,7 +82,7 @@ def discovery_load(project_id: str, _subjects_count: int, description: str, loca
     token = auth.get_access_token()
 
     # Decode the jwt ACCESS_TOKEN to get the commons endpoint
-    decoded_token = jwt.decode(token, secret=None, algorithms=["RS256"], options={"verify_signature":False})
+    decoded_token = jwt.decode(token, secret=None, algorithms=["RS256"], options={"verify_signature": False})
     commons_url = decoded_token["iss"].removesuffix("/user").removeprefix("https://")
 
     discovery_client = Gen3Metadata(auth.endpoint, auth)

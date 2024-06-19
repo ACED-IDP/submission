@@ -330,8 +330,8 @@ def ensure_project(program, project) -> bool:
         from
         edge_projectmemberofprogram
         where dst_id = (select node_id from node_program where _props->>'name' = %s)) and _props->>'code' = %s ;""",
-        (program, project,)
-    )
+                (program, project,)
+                )
     project_node_id = None
     _ = cur.fetchone()
     if _:
