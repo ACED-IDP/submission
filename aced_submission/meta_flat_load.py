@@ -9,8 +9,6 @@ import pathlib
 import sqlite3
 import tempfile
 import uuid
-import tempfile
-import uuid
 from datetime import datetime
 from functools import lru_cache
 from itertools import islice
@@ -23,14 +21,6 @@ from gen3_tracker.meta.dataframer import LocalFHIRDatabase
 import orjson
 from opensearchpy import OpenSearch as Elasticsearch
 from opensearchpy.helpers import bulk
-from dateutil.parser import parse
-<<<<<<< HEAD
-=======
-from dateutil import tz
-from elasticsearch import Elasticsearch
-from elasticsearch.helpers import bulk
->>>>>>> 1d542c4 (flake8)
-from gen3_tracker.meta.dataframer import LocalFHIRDatabase
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
