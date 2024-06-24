@@ -143,7 +143,6 @@ def load_edges(files, connection, dependency_order, mapping, project_node_id):
             continue
 
         with connection.cursor() as cursor:
-            print(path)
             with open(path) as f:
                 # copy a block of records into a file like stringIO buffer
                 record_count = 0
@@ -330,8 +329,8 @@ def ensure_project(program, project) -> bool:
         from
         edge_projectmemberofprogram
         where dst_id = (select node_id from node_program where _props->>'name' = %s)) and _props->>'code' = %s ;""",
-        (program, project,)
-    )
+                (program, project,)
+                )
     project_node_id = None
     _ = cur.fetchone()
     if _:

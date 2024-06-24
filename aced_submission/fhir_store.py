@@ -4,9 +4,9 @@ import pathlib
 import sys
 
 import click
-import elasticsearch
+import opensearchpy as elasticsearch
 import yaml
-from elasticsearch import Elasticsearch
+from opensearchpy import OpenSearch as Elasticsearch
 
 from aced_submission import NaturalOrderGroup
 from aced_submission.meta_flat_load import read_ndjson, write_bulk_http, DEFAULT_ELASTIC
@@ -43,7 +43,7 @@ def fhir_put(project_id, path, elastic_url) -> list[str]:
     for file_path in pathlib.Path(path).glob('*.ndjson'):
 
         write_bulk_http(elastic=elastic, index=index, doc_type=doc_type, limit=limit,
-                        generator=resource_generator(project_id, file_path), schema=None)
+                        generator=resource_generator(project_id, file_path))
 
         logs.append(f"wrote {file_path} to elasticsearch/{index}")
 
@@ -210,5 +210,3 @@ def _fhir_delete(project_id, output_format, elastic_url):
         yaml.dump(logs, sys.stdout, default_flow_style=False)
     else:
         json.dump(logs, sys.stdout, indent=2)
-
-
