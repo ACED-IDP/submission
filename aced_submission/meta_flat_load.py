@@ -15,12 +15,12 @@ from itertools import islice
 from typing import Dict, Iterator, Any, Generator, List
 
 import click
-import orjson
 from dateutil.parser import parse
 from dateutil import tz
-from elasticsearch import Elasticsearch
-from elasticsearch.helpers import bulk
 from gen3_tracker.meta.dataframer import LocalFHIRDatabase
+import orjson
+from opensearchpy import OpenSearch as Elasticsearch
+from opensearchpy.helpers import streaming_bulk
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -211,9 +211,10 @@ def write_bulk_http(elastic, index, limit, doc_type, generator) -> None:
         logger.info(f"{counter_} records written")
 
     logger.info(f'Writing bulk to {index} limit {limit}.')
-    _ = bulk(client=elastic,
-             actions=(d for d in _bulker(generator)),
-             request_timeout=120)
+    _ = streaming_bulk(client=elastic,
+                       actions=(d for d in _bulker(generator)),
+                       request_timeout=120,
+                       max_retries=5)
 
     return
 
@@ -231,7 +232,6 @@ def file_generator(project_id, generator) -> Iterator[Dict]:
     """Render guppy index for file."""
     program, project = project_id.split('-')
     for file in generator:
-        print("FILE: ", file)
         file['project_id'] = project_id
         file["auth_resource_path"] = f"/programs/{program}/projects/{project}"
         yield file

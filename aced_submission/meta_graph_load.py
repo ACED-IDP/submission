@@ -143,7 +143,6 @@ def load_edges(files, connection, dependency_order, mapping, project_node_id):
             continue
 
         with connection.cursor() as cursor:
-            print(path)
             with open(path) as f:
                 # copy a block of records into a file like stringIO buffer
                 record_count = 0
