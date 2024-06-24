@@ -39,7 +39,7 @@ def test_load_observations(meta_dir, project_id, tmpdir) -> None:
               output_path=None
               )
 
-    from elasticsearch import Elasticsearch
+    from opensearchpy import OpenSearch as Elasticsearch
     elastic = Elasticsearch([DEFAULT_ELASTIC], request_timeout=120)
     # retrieve by alias
     alias_mapping = elastic.indices.get_mapping(index='observation')
