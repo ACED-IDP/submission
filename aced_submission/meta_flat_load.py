@@ -20,7 +20,7 @@ from dateutil import tz
 from gen3_tracker.meta.dataframer import LocalFHIRDatabase
 import orjson
 from opensearchpy import OpenSearch as Elasticsearch
-from opensearchpy.helpers import bulk
+from opensearchpy.helpers import streaming_bulk
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -211,9 +211,10 @@ def write_bulk_http(elastic, index, limit, doc_type, generator) -> None:
         logger.info(f"{counter_} records written")
 
     logger.info(f'Writing bulk to {index} limit {limit}.')
-    _ = bulk(client=elastic,
-             actions=(d for d in _bulker(generator)),
-             request_timeout=120)
+    _ = streaming_bulk(client=elastic,
+                       actions=(d for d in _bulker(generator)),
+                       request_timeout=120,
+                       max_retries=5)
 
     return
 
