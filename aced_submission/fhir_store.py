@@ -7,6 +7,7 @@ import click
 import opensearchpy as elasticsearch
 import yaml
 from opensearchpy import OpenSearch as Elasticsearch
+from opensearchpy import OpenSearchException
 
 from aced_submission import NaturalOrderGroup
 from aced_submission.meta_flat_load import read_ndjson, write_bulk_http, DEFAULT_ELASTIC
@@ -35,7 +36,7 @@ def fhir_put(project_id, path, elastic_url) -> list[str]:
     """Upsert FHIR resources to a FHIR store."""
     assert project_id.count('-') == 1, f"{project_id} should have a single '-' separating program and project"
 
-    elastic = Elasticsearch([elastic_url], request_timeout=120)
+    elastic = Elasticsearch([elastic_url], request_timeout=120, max_retries=5)
 
     index = doc_type = 'fhir'
     limit = None
@@ -57,7 +58,7 @@ def fhir_get(project_id, path, elastic_url) -> list[str]:
     assert program, "program is required"
     assert project, "project is required"
 
-    elastic = Elasticsearch([elastic_url], request_timeout=120)
+    elastic = Elasticsearch([elastic_url], request_timeout=120, max_retries=5)
 
     index = 'fhir'
     logs = []
@@ -111,7 +112,7 @@ def fhir_delete(project_id, elastic_url) -> list[str]:
     assert program, "program is required"
     assert project, "project is required"
 
-    elastic = Elasticsearch([elastic_url], request_timeout=120)
+    elastic = Elasticsearch([elastic_url], request_timeout=120, max_retries=5)
 
     index = 'fhir'
     logs = []
@@ -144,8 +145,8 @@ def fhir_delete(project_id, elastic_url) -> list[str]:
         try:
             elasticsearch.helpers.bulk(elastic, actions)
             deleted_count += len(actions)
-        except elasticsearch.ElasticsearchException as e:
-            logs.append(f"Error deleting resources: {e}")
+        except OpenSearchException as e:
+            logs.append(f"Error deleting resources: {str(e)}")
 
     logs.append(f"Deleted {deleted_count} resources for project {project_id}")
 

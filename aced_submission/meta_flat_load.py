@@ -480,7 +480,7 @@ def load_flat(project_id: str, index: str, generator: Generator[dict, None, None
     if limit:
         limit = int(limit)
 
-    elastic = Elasticsearch([elastic_url], request_timeout=120)
+    elastic = Elasticsearch([elastic_url], request_timeout=120, max_retries=5)
     assert elastic.ping(), f"Connection to {elastic_url} failed"
     index = index.lower()
 
@@ -568,7 +568,7 @@ def _counts(project_id):
 
 def counts(project_id):
     """Count the number of patients, observations, and files."""
-    elastic = Elasticsearch([DEFAULT_ELASTIC], request_timeout=120)
+    elastic = Elasticsearch([DEFAULT_ELASTIC], request_timeout=120, max_retries=5)
     program, project = project_id.split('-')
     assert program, "program is required"
     assert project, "project is required"
@@ -601,7 +601,7 @@ def _delete(project_id, index):
 
 def delete(project_id, index):
     """Delete items from elastic index for project_id."""
-    elastic = Elasticsearch([DEFAULT_ELASTIC], request_timeout=120)
+    elastic = Elasticsearch([DEFAULT_ELASTIC], request_timeout=120, max_retries=5)
     assert project_id, "project_id is required"
     program, project = project_id.split('-')
     assert program, "program is required"
