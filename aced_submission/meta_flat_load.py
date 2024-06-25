@@ -20,7 +20,7 @@ from dateutil import tz
 from gen3_tracker.meta.dataframer import LocalFHIRDatabase
 import orjson
 from opensearchpy import OpenSearch as Elasticsearch
-from opensearchpy.helpers import streaming_bulk
+from opensearchpy.helpers import bulk
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -113,7 +113,7 @@ def generate_elasticsearch_mapping(df: List[Dict]) -> Dict[str, Any]:
             elif is_bool_dtype(row[column]):
                 mapping["mappings"]["properties"][column] = {"type": "keyword"}
             elif is_datetime64_any_dtype(row[column]):
-                mapping["mappings"]["properties"][column] = {"type": "text"}
+                mapping["mappings"]["properties"][column] = {"type": "keyword"}
             elif is_object_dtype(row[column]):
                 if isinstance(row[column], list):
                     mapping["mappings"]["properties"][column] = {"type": "keyword"}
@@ -211,7 +211,7 @@ def write_bulk_http(elastic, index, limit, doc_type, generator) -> None:
         logger.info(f"{counter_} records written")
 
     logger.info(f'Writing bulk to {index} limit {limit}.')
-    _ = streaming_bulk(client=elastic,
+    _ = bulk(client=elastic,
                        actions=(d for d in _bulker(generator)),
                        request_timeout=120,
                        max_retries=5)
