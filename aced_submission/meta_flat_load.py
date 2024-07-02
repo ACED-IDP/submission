@@ -416,7 +416,13 @@ def compare_mapping(existing_mapping: Dict[str, Any], new_mapping: Dict[str, Any
     """
 
     new_properties = new_mapping['mappings']['properties']
-    existing_properties = existing_mapping['mappings']['properties']
+
+    # Existing mapping could have been empty because no observations were provided on previous load, but not files.
+    # In this case existing properties on file index wouldn't exist, resulting in a key error.
+    if 'properties' in existing_mapping['mappings']:
+        existing_properties = existing_mapping['mappings']['properties']
+    else:
+        existing_properties = {}
 
     # Find differences and update mapping
     updates = {}
