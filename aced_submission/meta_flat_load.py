@@ -20,6 +20,7 @@ from dateutil import tz
 from gen3_tracker.meta.dataframer import LocalFHIRDatabase
 import orjson
 from opensearchpy import OpenSearch as Elasticsearch
+from opensearchpy.exceptions import NotFoundError
 from opensearchpy.helpers import bulk
 
 logging.basicConfig(level=logging.INFO)
@@ -82,10 +83,9 @@ def generate_elasticsearch_mapping(df: List[Dict]) -> Dict[str, Any]:
         try:
             if not isinstance(value, str):
                 raise ValueError('Value is not a string')
-            tzinfos = {"PDT": tz.gettz('US/West')}
-            parse(value, fuzzy=True, tzinfos=tzinfos)
+            parse(value, ignoretz=True)
             return True
-        except Exception:  # noqa
+        except (ValueError, OverflowError):
             return False
 
     def is_object_dtype(value: Any) -> bool:
@@ -621,7 +621,10 @@ def delete(project_id, index):
         }
     }
     print("deleting, waiting up to 5 min. for response")
-    print(index, elastic.delete_by_query(index=index, body=query, timeout='5m'))
+    try:
+        print(index, elastic.delete_by_query(index=index, body=query, timeout=300))
+    except NotFoundError:
+        return
 
 
 if __name__ == '__main__':
