@@ -471,7 +471,9 @@ def _load_flat(input_path, project_id, data_type):
 def load_flat(project_id: str, index: str, generator: Generator[dict, None, None], limit: str, elastic_url: str, output_path: str):
     """Loads flattened FHIR data into Elasticsearch database. Replaces tube-lite"""
 
-    assert index in ["observation", "file"], f"Index {index} does not have a supported generator"
+    supported_resources = ["observation", "file", "research_subject"]
+    assert index in supported_resources, \
+        f"Index {index} does not have a supported generator to flatten resources."
 
     if limit:
         limit = int(limit)
