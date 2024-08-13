@@ -4,9 +4,9 @@ from typing import List
 import orjson
 
 def load_grip(graph_name: str, directory_path: str, output: dict, access_token: str) -> None:
-    """Loads a directory of .ndjson or .gz files to GRIP.
+    """Loads a directory of .ndjson or .gz files to grip.
         Args:
-                graph_name: The name of the graph in BMEG
+                graph_name: The name of the graph
                 directory_path: the file path to the directory that contains the FHIR files
 
         TODO: implement FHIR schema in grip
@@ -15,13 +15,13 @@ def load_grip(graph_name: str, directory_path: str, output: dict, access_token: 
 
     # List graphs and check to see if graph name is amoung the graphs listed
     graphs = list_graphs(output, access_token)
-    assert graph_name in graphs, f"ERROR: graph {graph_name} not found in GRIP"
+    assert graph_name in graphs, output["logs"].append(f"ERROR: graph {graph_name} not found in grip")
 
     output["logs"].append(f"loading files into {graph_name} from {directory_path}")
 
-    assert os.path.isdir(directory_path), f"directory path {directory_path} is not a directory"
+    assert os.path.isdir(directory_path), output["logs"].append(f"directory path {directory_path} is not a directory")
     importable_files = [f for f in os.listdir(directory_path) if any([f.endswith(".json"), f.endswith(".gz"), f.endswith(".ndjson")])]
-    assert len(importable_files) > 0, "No files"
+    assert len(importable_files) > 0, output["logs"].append(f"No .json, .gz or .ndjson files have been uploaded")
 
     output["logs"].append(f"files in {directory_path}: {str(os.listdir(directory_path))}")
     output["logs"].append(f"importable files found: {str(importable_files)}")
@@ -45,11 +45,11 @@ def load_grip(graph_name: str, directory_path: str, output: dict, access_token: 
 
 
 def bulk_delete_grip(graph_name: str, vertices: List[str], edges: List[str], output: dict, access_token: str) -> None:
-    """Deletes graph elements from a BMEG graph.
+    """Deletes graph elements from a grip graph.
         Args:
-            graph_name: The name of the graph in BMEG
-            vertices:   A list of BMEG vertex ids
-            edges:      A list of BMEG edge ids
+            graph_name: The name of the graph
+            vertices:   A list of vertex ids
+            edges:      A list of edge ids
     """
     data = {"graph": graph_name,
             "vertices": vertices,
@@ -128,7 +128,7 @@ def add_edge(graph_name: str, edge: dict, output: dict, access_token: str) -> No
 
 
 def list_graphs(output: dict, access_token: str) -> List[str]:
-    """Returns a list of all graph names in Grip"""
+    """Returns a list of all graph names in grip"""
     response = requests.get(f"http://local-grip:8201/graphql/list-graphs",
                     headers={"Authorization": f"bearer {access_token}"}
                 )
@@ -137,7 +137,7 @@ def list_graphs(output: dict, access_token: str) -> List[str]:
     json_data = response.json()
     output["logs"].append(f"list-graphs response: {json_data}")
 
-    assert "data" in json_data and "graphs" in json_data["data"], "Expecting json_data['data']['graphs'] to be indexable"
+    assert "data" in json_data and "graphs" in json_data["data"], output["logs"].append("Expecting json_data['data']['graphs'] to be indexable")
     return json_data["data"]["graphs"]
 
 
@@ -146,7 +146,7 @@ def add_schema(graph_name: str, schema_path: str, output: dict, access_token: st
     is whatever graph is specified with the '"graph": "ESCA"' at the top of the schema file,
     not the graph_name that is specified"""
 
-    assert os.path.isfile(schema_path), f"{schema_path} is not a file"
+    assert os.path.isfile(schema_path), output["logs"].append(f"{schema_path} is not a file")
     with open(schema_path, 'rb') as file_io:
         files = {'file': (schema_path, file_io)}
         response = requests.post(
@@ -158,3 +158,31 @@ def add_schema(graph_name: str, schema_path: str, output: dict, access_token: st
     response.raise_for_status()
     json_data = response.json()
     output["logs"].append(f"add-schema response: {json_data}")
+
+
+def add_graph(graph_name: str, output: dict, access_token: str) -> None:
+    """Creates a new graph"""
+
+    existing_graphs = list_graphs(output, access_token)
+    if graph_name not in existing_graphs:
+        response = requests.post(f"http://local-grip:8201/graphql/{graph_name}/add-graph",
+                    headers={"Authorization": f"bearer {access_token}"})
+
+        response.raise_for_status()
+        json_data = response.json()
+        output["logs"].append(f"add-graph response: {json_data}")
+    else:
+        output["logs"].append(f"graph {graph_name} already exists")
+
+
+def drop_graph(graph_name: str, output: dict, access_token: str) -> None:
+    """Deletes a graph and all of its data"""
+
+    existing_graphs = list_graphs(output, access_token)
+    assert graph_name in existing_graphs, output["logs"].append(f"Graph {graph_name} does not exist in Grip. Existing graphs: {existing_graphs}")
+    response = requests.delete(f"http://local-grip:8201/graphql/{graph_name}/del-graph",
+                   headers={"Authorization": f"bearer {access_token}"})
+
+    response.raise_for_status()
+    json_data = response.json()
+    output["logs"].append(f"del-graph response: {json_data}")
