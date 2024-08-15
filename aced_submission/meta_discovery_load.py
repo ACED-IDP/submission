@@ -75,7 +75,20 @@ def discovery_delete(project_id: str):
 
 def discovery_load(project_id: str, _subjects_count: int, description: str, location: str):
     """Writes project information to discovery metadata-service.
-       Overwrites existing data"""
+       Overwrites existing data
+
+       Example Discovery object:
+        {'id': 'a45ea123-aeda-5982-aeac-79bfb1bf5920', 'name': 'research_study', 'relations': [],
+            'object': {
+                'id': 'a45ea123-aeda-5982-aeac-79bfb1bf5920',
+                'status': 'active',
+                'description': 'Skeleton ResearchStudy for synthea-delete',
+                'resourceType': 'ResearchStudy', 'identifier': ['synthea_delete#synthea-delete'],
+                'identifier_coding': ['https://aced-idp.org/synthea-delete#synthea-delete']
+            }
+        }
+
+    """
 
     program, project = project_id.split("-")
     auth = ensure_auth()
@@ -108,3 +121,28 @@ def discovery_load(project_id: str, _subjects_count: int, description: str, loca
         print(f"Added {project_id}")
     except requests.exceptions.HTTPError as e:
         print(str(e))
+
+
+    """TODO old code for loading discovery page. Repurpose if we implement discovery page
+    in FF
+
+    if os.path.isfile(research_study):
+    output['logs'].append("Writing to metadata-service")
+    elastic = Elasticsearch([DEFAULT_ELASTIC], request_timeout=120)
+    query = {
+        "query": {
+            "bool": {
+                "must": [
+                    {"match": {"project_id": project_id}}
+                ]
+            }
+        }
+    }
+    results = elastic.search(index="gen3.aced.io_researchsubject_0", body=query, size=0)
+    _patients_count = results['hits']['total']['value']
+
+    with open(research_study, "r") as study:
+        study_meta = json.loads(study.readline())
+    discovery_load(project_id, _patients_count, study_meta["object"]["description"], study_meta["object"]["identifier_coding"])
+    output['logs'].append(f"Loaded discovery study {project_id}")
+"""

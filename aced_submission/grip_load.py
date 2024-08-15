@@ -3,6 +3,7 @@ import os
 from typing import List
 import orjson
 
+
 def bulk_add(graph_name: str, project_id: str, directory_path: str, output: dict, access_token: str) -> None:
     """Loads a directory of .ndjson or .gz files to grip.
         Args:
@@ -57,9 +58,9 @@ def bulk_delete(graph_name: str, vertices: List[str], project_id: str,  edges: L
             "edges": edges
             }
     response = requests.delete(f"http://local-grip:8201/graphql/{graph_name}/bulk-delete/{project_id}",
-                    data=orjson.dumps(data),
-                    headers={"Authorization": f"bearer {access_token}"}
-                )
+                               data=orjson.dumps(data),
+                               headers={"Authorization": f"bearer {access_token}"}
+                               )
 
     response.raise_for_status()
     json_data = response.json()
@@ -69,8 +70,8 @@ def bulk_delete(graph_name: str, vertices: List[str], project_id: str,  edges: L
 def delete_edge(graph_name: str, edge_id: str, project_id: str, output: dict, access_token: str) -> None:
     """Deletes one edge from the specified graph"""
     response = requests.delete(f"http://local-grip:8201/graphql/{graph_name}/del-edge/{project_id}/{edge_id}",
-                    headers={"Authorization": f"bearer {access_token}"}
-                )
+                               headers={"Authorization": f"bearer {access_token}"}
+                               )
 
     response.raise_for_status()
     json_data = response.json()
@@ -80,15 +81,15 @@ def delete_edge(graph_name: str, edge_id: str, project_id: str, output: dict, ac
 def delete_vertex(graph_name: str, vertex_id: str, project_id: str, output: dict, access_token: str) -> None:
     """Deletes one vertex from the specified graph"""
     response = requests.delete(f"http://local-grip:8201/graphql/{graph_name}/del-verex/{project_id}/{vertex_id}",
-                    headers={"Authorization": f"bearer {access_token}"}
-                )
+                               headers={"Authorization": f"bearer {access_token}"}
+                               )
 
     response.raise_for_status()
     json_data = response.json()
     output["logs"].append(f"del-vertex response: {json_data}")
 
 
-def add_vertex(graph_name: str, vertex: dict, project_id:str, output: dict, access_token: str) -> None:
+def add_vertex(graph_name: str, vertex: dict, project_id: str, output: dict, access_token: str) -> None:
     """Adds one vertex to the specified graph
         required vertex format:
             {
@@ -98,9 +99,9 @@ def add_vertex(graph_name: str, vertex: dict, project_id:str, output: dict, acce
             }
     """
     response = requests.post(f"http://local-grip:8201/graphql/{graph_name}/add-verex/{project_id}/{vertex["gid"]}",
-                    headers={"Authorization": f"bearer {access_token}"},
-                    json=vertex
-                )
+                             headers={"Authorization": f"bearer {access_token}"},
+                             json=vertex
+                             )
 
     response.raise_for_status()
     json_data = response.json()
@@ -119,9 +120,9 @@ def add_edge(graph_name: str, edge: dict, project_id: str, output: dict, access_
             }
     """
     response = requests.post(f"http://local-grip:8201/graphql/{graph_name}/add-verex/{project_id}/{edge["gid"]}",
-                    headers={"Authorization": f"bearer {access_token}"},
-                    json=edge
-                )
+                             headers={"Authorization": f"bearer {access_token}"},
+                             json=edge
+                             )
 
     response.raise_for_status()
     json_data = response.json()
@@ -130,9 +131,9 @@ def add_edge(graph_name: str, edge: dict, project_id: str, output: dict, access_
 
 def list_graphs(output: dict, access_token: str) -> List[str]:
     """Returns a list of all graph names in grip"""
-    response = requests.get(f"http://local-grip:8201/graphql/list-graphs",
-                    headers={"Authorization": f"bearer {access_token}"}
-                )
+    response = requests.get("http://local-grip:8201/graphql/list-graphs",
+                            headers={"Authorization": f"bearer {access_token}"}
+                            )
 
     response.raise_for_status()
     json_data = response.json()
@@ -167,7 +168,7 @@ def add_graph(graph_name: str, project_id: str, output: dict, access_token: str)
     exists = graph_exists(graph_name, output, access_token)
     if not exists:
         response = requests.post(f"http://local-grip:8201/graphql/{graph_name}/add-graph/{project_id}",
-                    headers={"Authorization": f"bearer {access_token}"})
+                                 headers={"Authorization": f"bearer {access_token}"})
 
         response.raise_for_status()
         json_data = response.json()
@@ -185,13 +186,26 @@ def drop_graph(graph_name: str, project_id: str, output: dict, access_token: str
     # But it might be good to still have an assert statement here to catch the fact that the graph doesn't exist
     assert exists, output["logs"].append(f"Graph {graph_name} does not exist in grip")
     response = requests.delete(f"http://local-grip:8201/graphql/{graph_name}/del-graph/{project_id}",
-                   headers={"Authorization": f"bearer {access_token}"})
+                               headers={"Authorization": f"bearer {access_token}"})
 
     response.raise_for_status()
     json_data = response.json()
     output["logs"].append(f"del-graph response: {json_data}")
 
+
 def graph_exists(graph_name: str, output: dict, access_token: str) -> bool:
     """Check to see if the provided graph name exists in grip"""
     existing_graphs = list_graphs(output, access_token)
     return graph_name in existing_graphs
+
+
+def delete_project(graph_name: str, project_id: str, output: dict, access_token: str) -> None:
+    """Delete a gen3 project entirely from a grip graph"""
+    response = requests.delete(
+            f"http://local-grip:8201/graphql/{graph_name}/proj-delete/{project_id}",
+            headers={"Authorization": f"bearer {access_token}"},
+            )
+
+    response.raise_for_status()
+    json_data = response.json()
+    output["logs"].append(f"proj-delete response: {json_data}")
