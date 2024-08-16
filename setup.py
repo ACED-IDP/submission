@@ -41,7 +41,7 @@ setup(
 
     # Versions should comply with PEP 440:
     # https://packaging.python.org/en/latest/single_source_version.html
-    version='0.0.9rc28',  # Required
+    version='0.0.9rc29',  # Required
 
     # This is a one-line description or tagline of what your project does. This
     # corresponds to the "Summary" metadata field:
@@ -78,7 +78,7 @@ setup(
         'License :: OSI Approved :: MIT License',
 
         # Specify the Python versions you support here.
-        'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.12',
     ],
 
     # This field adds keywords for your project which will appear on the
@@ -97,7 +97,7 @@ setup(
     # and refuse to install the project if the version does not match. If you
     # do not support Python 2, you can simplify this to '>=3.5' or similar, see
     # https://packaging.python.org/guides/distributing-packages-using-setuptools/#python-requires
-    python_requires='>=3.6, <4',
+    python_requires='>=3.12, <4',
 
     # This field lists other packages that your project depends on to run.
     # Any package you put here will be installed by pip when your project is
