@@ -1,10 +1,10 @@
-import requests
 import os
-from typing import List
 import orjson
+import requests
+from typing import List
 
 
-def bulk_add(graph_name: str, project_id: str, directory_path: str, output: dict, access_token: str) -> None:
+def bulk_add(graph_name: str, project_id: str, directory_path: str, output: dict, access_token: str) -> List[dict]:
     """Loads a directory of .ndjson or .gz files to grip.
         Args:
                 graph_name: The name of the graph
@@ -14,6 +14,8 @@ def bulk_add(graph_name: str, project_id: str, directory_path: str, output: dict
         TODO: implement FHIR schema in grip
                     so that edges that don't validate in graph are rejected
     """
+    response_json= []
+
     # List graphs and check to see if graph name is amoung the graphs listed
     exists = graph_exists(graph_name, output, access_token)
     assert exists, output["logs"].append(f"ERROR: graph {graph_name} not found in grip")
@@ -42,10 +44,13 @@ def bulk_add(graph_name: str, project_id: str, directory_path: str, output: dict
 
         response.raise_for_status()
         json_data = response.json()
+        response_json.append(json_data)
         output["logs"].append(f"json data: {json_data}")
 
+    return response_json
 
-def bulk_delete(graph_name: str, vertices: List[str], project_id: str,  edges: List[str], output: dict, access_token: str) -> None:
+
+def bulk_delete(graph_name: str, vertices: List[str], project_id: str,  edges: List[str], output: dict, access_token: str) -> dict:
     """Deletes graph elements from a grip graph.
         Args:
             graph_name: The name of the graph
@@ -66,8 +71,10 @@ def bulk_delete(graph_name: str, vertices: List[str], project_id: str,  edges: L
     json_data = response.json()
     output["logs"].append(f"bulk-delete response: {json_data}")
 
+    return json_data
 
-def delete_edge(graph_name: str, edge_id: str, project_id: str, output: dict, access_token: str) -> None:
+
+def delete_edge(graph_name: str, edge_id: str, project_id: str, output: dict, access_token: str) -> dict:
     """Deletes one edge from the specified graph"""
     response = requests.delete(f"http://local-grip:8201/graphql/{graph_name}/del-edge/{project_id}/{edge_id}",
                                headers={"Authorization": f"bearer {access_token}"}
@@ -77,8 +84,10 @@ def delete_edge(graph_name: str, edge_id: str, project_id: str, output: dict, ac
     json_data = response.json()
     output["logs"].append(f"del-edge response: {json_data}")
 
+    return json_data
 
-def delete_vertex(graph_name: str, vertex_id: str, project_id: str, output: dict, access_token: str) -> None:
+
+def delete_vertex(graph_name: str, vertex_id: str, project_id: str, output: dict, access_token: str) -> dict:
     """Deletes one vertex from the specified graph"""
     response = requests.delete(f"http://local-grip:8201/graphql/{graph_name}/del-verex/{project_id}/{vertex_id}",
                                headers={"Authorization": f"bearer {access_token}"}
@@ -88,8 +97,10 @@ def delete_vertex(graph_name: str, vertex_id: str, project_id: str, output: dict
     json_data = response.json()
     output["logs"].append(f"del-vertex response: {json_data}")
 
+    return json_data
 
-def add_vertex(graph_name: str, vertex: dict, project_id: str, output: dict, access_token: str) -> None:
+
+def add_vertex(graph_name: str, vertex: dict, project_id: str, output: dict, access_token: str) -> dict:
     """Adds one vertex to the specified graph
         required vertex format:
             {
@@ -107,8 +118,10 @@ def add_vertex(graph_name: str, vertex: dict, project_id: str, output: dict, acc
     json_data = response.json()
     output["logs"].append(f"add-vertex response: {json_data}")
 
+    return json_data
 
-def add_edge(graph_name: str, edge: dict, project_id: str, output: dict, access_token: str) -> None:
+
+def add_edge(graph_name: str, edge: dict, project_id: str, output: dict, access_token: str) -> dict:
     """Adds one edge to the specified graph
         required edge format:
             {
@@ -128,8 +141,10 @@ def add_edge(graph_name: str, edge: dict, project_id: str, output: dict, access_
     json_data = response.json()
     output["logs"].append(f"add-edge response: {json_data}")
 
+    return json_data
 
-def list_graphs(output: dict, access_token: str) -> List[str]:
+
+def list_graphs(output: dict, access_token: str) -> dict:
     """Returns a list of all graph names in grip"""
     response = requests.get("http://local-grip:8201/graphql/list-graphs",
                             headers={"Authorization": f"bearer {access_token}"}
@@ -140,10 +155,10 @@ def list_graphs(output: dict, access_token: str) -> List[str]:
     output["logs"].append(f"list-graphs response: {json_data}")
 
     assert "data" in json_data and "graphs" in json_data["data"], output["logs"].append("Expecting json_data['data']['graphs'] to be indexable")
-    return json_data["data"]["graphs"]
+    return json_data
 
 
-def add_schema(graph_name: str, schema_path: str, project_id: str, output: dict, access_token: str) -> None:
+def add_schema(graph_name: str, schema_path: str, project_id: str, output: dict, access_token: str) -> dict:
     """Adds a schema to a graph in grip. NOTE: currently the schema that is attached to the graph
     is whatever graph is specified with the '"graph": "ESCA"' at the top of the schema file,
     not the graph_name that is specified"""
@@ -160,25 +175,24 @@ def add_schema(graph_name: str, schema_path: str, project_id: str, output: dict,
     response.raise_for_status()
     json_data = response.json()
     output["logs"].append(f"add-schema response: {json_data}")
+    return json_data
 
 
-def add_graph(graph_name: str, project_id: str, output: dict, access_token: str) -> None:
+def add_graph(graph_name: str, project_id: str, output: dict, access_token: str) -> dict:
     """Creates a new graph"""
 
-    exists = graph_exists(graph_name, output, access_token)
-    if not exists:
-        response = requests.post(f"http://local-grip:8201/graphql/{graph_name}/add-graph/{project_id}",
-                                 headers={"Authorization": f"bearer {access_token}"})
+    response = requests.post(f"http://local-grip:8201/graphql/{graph_name}/add-graph/{project_id}",
+                                headers={"Authorization": f"bearer {access_token}"})
 
-        response.raise_for_status()
-        json_data = response.json()
-        output["logs"].append(f"add-graph response: {json_data}")
-        return
-
-    output["logs"].append(f"graph {graph_name} already exists")
+    response.raise_for_status()
+    json_data = response.json()
+    output["logs"].append(f"add-graph response: {json_data}")
+    return json_data
 
 
-def drop_graph(graph_name: str, project_id: str, output: dict, access_token: str) -> None:
+
+
+def drop_graph(graph_name: str, project_id: str, output: dict, access_token: str) -> dict:
     """Deletes a graph and all of its data"""
 
     exists = graph_exists(graph_name, output, access_token)
@@ -191,15 +205,16 @@ def drop_graph(graph_name: str, project_id: str, output: dict, access_token: str
     response.raise_for_status()
     json_data = response.json()
     output["logs"].append(f"del-graph response: {json_data}")
+    return json_data
 
 
 def graph_exists(graph_name: str, output: dict, access_token: str) -> bool:
     """Check to see if the provided graph name exists in grip"""
-    existing_graphs = list_graphs(output, access_token)
+    existing_graphs = list_graphs(output, access_token)["data"]["graphs"]
     return graph_name in existing_graphs
 
 
-def delete_project(graph_name: str, project_id: str, output: dict, access_token: str) -> None:
+def delete_project(graph_name: str, project_id: str, output: dict, access_token: str) -> dict:
     """Delete a gen3 project entirely from a grip graph"""
     response = requests.delete(
             f"http://local-grip:8201/graphql/{graph_name}/proj-delete/{project_id}",
@@ -209,3 +224,4 @@ def delete_project(graph_name: str, project_id: str, output: dict, access_token:
     response.raise_for_status()
     json_data = response.json()
     output["logs"].append(f"proj-delete response: {json_data}")
+    return json_data
