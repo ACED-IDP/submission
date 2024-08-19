@@ -3,13 +3,17 @@ import orjson
 import requests
 from typing import List
 
+GRIP_SERVICE = "local-grip:8201"
+NGINX_PATH = "graphql"
 
-def bulk_add(graph_name: str, project_id: str, directory_path: str, output: dict, access_token: str) -> List[dict]:
+def bulk_load(graph_name: str, project_id: str, directory_path: str, output: dict, access_token: str) -> List[dict]:
     """Loads a directory of .ndjson or .gz files to grip.
         Args:
                 graph_name: The name of the graph
                 project_id: the Gen3 program-project to be used
                 directory_path: the file path to the directory that contains the FHIR files
+                output: the dict the holds output logs
+                access_token: JWT token that contains user identification information for permissions checking
 
         TODO: implement FHIR schema in grip
                     so that edges that don't validate in graph are rejected
@@ -36,13 +40,12 @@ def bulk_add(graph_name: str, project_id: str, directory_path: str, output: dict
         with open(file_path, 'rb') as file_io:
             files = {'file': (file_path, file_io)}
             response = requests.post(
-                f"http://local-grip:8201/graphql/{graph_name}/bulk-load/{project_id}",
+                f"http://{GRIP_SERVICE}/{NGINX_PATH}/{graph_name}/bulk-load/{project_id}",
                 data={"types": graph_component},
                 headers={"Authorization": f"bearer {access_token}"},
                 files=files
             )
 
-        response.raise_for_status()
         json_data = response.json()
         response_json.append(json_data)
         output["logs"].append(f"json data: {json_data}")
@@ -62,12 +65,11 @@ def bulk_delete(graph_name: str, vertices: List[str], project_id: str,  edges: L
             "vertices": vertices,
             "edges": edges
             }
-    response = requests.delete(f"http://local-grip:8201/graphql/{graph_name}/bulk-delete/{project_id}",
+    response = requests.delete(f"http://{GRIP_SERVICE}/{NGINX_PATH}/{graph_name}/bulk-delete/{project_id}",
                                data=orjson.dumps(data),
                                headers={"Authorization": f"bearer {access_token}"}
                                )
 
-    response.raise_for_status()
     json_data = response.json()
     output["logs"].append(f"bulk-delete response: {json_data}")
 
@@ -76,11 +78,10 @@ def bulk_delete(graph_name: str, vertices: List[str], project_id: str,  edges: L
 
 def delete_edge(graph_name: str, edge_id: str, project_id: str, output: dict, access_token: str) -> dict:
     """Deletes one edge from the specified graph"""
-    response = requests.delete(f"http://local-grip:8201/graphql/{graph_name}/del-edge/{project_id}/{edge_id}",
+    response = requests.delete(f"http://{GRIP_SERVICE}/{NGINX_PATH}/{graph_name}/del-edge/{project_id}/{edge_id}",
                                headers={"Authorization": f"bearer {access_token}"}
                                )
 
-    response.raise_for_status()
     json_data = response.json()
     output["logs"].append(f"del-edge response: {json_data}")
 
@@ -89,11 +90,10 @@ def delete_edge(graph_name: str, edge_id: str, project_id: str, output: dict, ac
 
 def delete_vertex(graph_name: str, vertex_id: str, project_id: str, output: dict, access_token: str) -> dict:
     """Deletes one vertex from the specified graph"""
-    response = requests.delete(f"http://local-grip:8201/graphql/{graph_name}/del-verex/{project_id}/{vertex_id}",
+    response = requests.delete(f"http://{GRIP_SERVICE}/{NGINX_PATH}/{graph_name}/del-vertex/{project_id}/{vertex_id}",
                                headers={"Authorization": f"bearer {access_token}"}
                                )
 
-    response.raise_for_status()
     json_data = response.json()
     output["logs"].append(f"del-vertex response: {json_data}")
 
@@ -109,12 +109,11 @@ def add_vertex(graph_name: str, vertex: dict, project_id: str, output: dict, acc
                 "data": dict, vertex properties.
             }
     """
-    response = requests.post(f"http://local-grip:8201/graphql/{graph_name}/add-verex/{project_id}/{vertex["gid"]}",
+    response = requests.post(f"http://{GRIP_SERVICE}/{NGINX_PATH}/{graph_name}/add-vertex/{project_id}/{vertex['gid']}",
                              headers={"Authorization": f"bearer {access_token}"},
                              json=vertex
                              )
 
-    response.raise_for_status()
     json_data = response.json()
     output["logs"].append(f"add-vertex response: {json_data}")
 
@@ -132,12 +131,11 @@ def add_edge(graph_name: str, edge: dict, project_id: str, output: dict, access_
                 "data": dict, optional edge properties.
             }
     """
-    response = requests.post(f"http://local-grip:8201/graphql/{graph_name}/add-verex/{project_id}/{edge["gid"]}",
+    response = requests.post(f"http://{GRIP_SERVICE}/{NGINX_PATH}/{graph_name}/add-verex/{project_id}/{edge["gid"]}",
                              headers={"Authorization": f"bearer {access_token}"},
                              json=edge
                              )
 
-    response.raise_for_status()
     json_data = response.json()
     output["logs"].append(f"add-edge response: {json_data}")
 
@@ -146,15 +144,14 @@ def add_edge(graph_name: str, edge: dict, project_id: str, output: dict, access_
 
 def list_graphs(output: dict, access_token: str) -> dict:
     """Returns a list of all graph names in grip"""
-    response = requests.get("http://local-grip:8201/graphql/list-graphs",
+    response = requests.get(f"http://{GRIP_SERVICE}/{NGINX_PATH}/list-graphs",
                             headers={"Authorization": f"bearer {access_token}"}
                             )
 
-    response.raise_for_status()
     json_data = response.json()
     output["logs"].append(f"list-graphs response: {json_data}")
 
-    assert "data" in json_data and "graphs" in json_data["data"], output["logs"].append("Expecting json_data['data']['graphs'] to be indexable")
+    assert "data" in json_data and "graphs" in json_data["data"], output["logs"].append("Expecting json_data['data']['graphs'] to exist")
     return json_data
 
 
@@ -167,12 +164,11 @@ def add_schema(graph_name: str, schema_path: str, project_id: str, output: dict,
     with open(schema_path, 'rb') as file_io:
         files = {'file': (schema_path, file_io)}
         response = requests.post(
-            f"http://local-grip:8201/graphql/{graph_name}/add-schema/{project_id}",
+            f"http://{GRIP_SERVICE}/{NGINX_PATH}/{graph_name}/add-schema/{project_id}",
             headers={"Authorization": f"bearer {access_token}"},
             files=files
         )
 
-    response.raise_for_status()
     json_data = response.json()
     output["logs"].append(f"add-schema response: {json_data}")
     return json_data
@@ -181,10 +177,9 @@ def add_schema(graph_name: str, schema_path: str, project_id: str, output: dict,
 def add_graph(graph_name: str, project_id: str, output: dict, access_token: str) -> dict:
     """Creates a new graph"""
 
-    response = requests.post(f"http://local-grip:8201/graphql/{graph_name}/add-graph/{project_id}",
+    response = requests.post(f"http://{GRIP_SERVICE}/{NGINX_PATH}/{graph_name}/add-graph/{project_id}",
                                 headers={"Authorization": f"bearer {access_token}"})
 
-    response.raise_for_status()
     json_data = response.json()
     output["logs"].append(f"add-graph response: {json_data}")
     return json_data
@@ -199,10 +194,9 @@ def drop_graph(graph_name: str, project_id: str, output: dict, access_token: str
     # Not going to get a grip error if you attempt to delete something that doesn't exist it grip,
     # But it might be good to still have an assert statement here to catch the fact that the graph doesn't exist
     assert exists, output["logs"].append(f"Graph {graph_name} does not exist in grip")
-    response = requests.delete(f"http://local-grip:8201/graphql/{graph_name}/del-graph/{project_id}",
+    response = requests.delete(f"http://{GRIP_SERVICE}/{NGINX_PATH}/{graph_name}/del-graph/{project_id}",
                                headers={"Authorization": f"bearer {access_token}"})
 
-    response.raise_for_status()
     json_data = response.json()
     output["logs"].append(f"del-graph response: {json_data}")
     return json_data
@@ -217,11 +211,10 @@ def graph_exists(graph_name: str, output: dict, access_token: str) -> bool:
 def delete_project(graph_name: str, project_id: str, output: dict, access_token: str) -> dict:
     """Delete a gen3 project entirely from a grip graph"""
     response = requests.delete(
-            f"http://local-grip:8201/graphql/{graph_name}/proj-delete/{project_id}",
+            f"http://{GRIP_SERVICE}/{NGINX_PATH}/{graph_name}/proj-delete/{project_id}",
             headers={"Authorization": f"bearer {access_token}"},
             )
 
-    response.raise_for_status()
     json_data = response.json()
     output["logs"].append(f"proj-delete response: {json_data}")
     return json_data
