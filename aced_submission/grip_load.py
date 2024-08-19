@@ -131,7 +131,7 @@ def add_edge(graph_name: str, edge: dict, project_id: str, output: dict, access_
                 "data": dict, optional edge properties.
             }
     """
-    response = requests.post(f"http://{GRIP_SERVICE}/{NGINX_PATH}/{graph_name}/add-verex/{project_id}/{edge["gid"]}",
+    response = requests.post(f"http://{GRIP_SERVICE}/{NGINX_PATH}/{graph_name}/add-edge/{project_id}/{edge['gid']}",
                              headers={"Authorization": f"bearer {access_token}"},
                              json=edge
                              )
