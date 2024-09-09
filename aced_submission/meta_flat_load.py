@@ -71,7 +71,10 @@ def generate_elasticsearch_mapping(df: List[Dict]) -> Dict[str, Any]:
     """
 
     def is_integer_dtype(value: Any) -> bool:
-        return isinstance(value, int) and not isinstance(value, bool)
+        return isinstance(value, int) and value.bit_length() <= 32 and not isinstance(value, bool)
+    
+    def is_long_dtype(value: Any) -> bool:
+        return isinstance(row[column], int) and row[column].bit_length() > 32
 
     def is_float_dtype(value: Any) -> bool:
         return isinstance(value, float)
@@ -108,6 +111,8 @@ def generate_elasticsearch_mapping(df: List[Dict]) -> Dict[str, Any]:
         for column in row.keys():
             if is_integer_dtype(row[column]):
                 mapping["mappings"]["properties"][column] = {"type": "integer"}
+            elif is_long_dtype(row[column]):
+                mapping["mappings"]["properties"][column] = {"type": "long"}
             elif is_float_dtype(row[column]):
                 mapping["mappings"]["properties"][column] = {"type": "float"}
             elif is_bool_dtype(row[column]):
@@ -121,6 +126,7 @@ def generate_elasticsearch_mapping(df: List[Dict]) -> Dict[str, Any]:
                     mapping["mappings"]["properties"][column] = {"type": "keyword"}
             elif isinstance(row[column], str):
                 mapping["mappings"]["properties"][column] = {"type": "keyword"}
+    
     return mapping
 
 
@@ -470,10 +476,6 @@ def _load_flat(input_path, project_id, data_type):
 
 def load_flat(project_id: str, index: str, generator: Generator[dict, None, None], limit: str, elastic_url: str, output_path: str):
     """Loads flattened FHIR data into Elasticsearch database. Replaces tube-lite"""
-
-    supported_resources = ["observation", "file", "researchsubject"]
-    assert index in supported_resources, \
-        f"Index {index} does not have a supported generator to flatten resources"
 
     if limit:
         limit = int(limit)
