@@ -1,10 +1,14 @@
 import os
 import orjson
 import requests
-from typing import List
+import orjson
+from typing import List, Generator
+
 
 GRIP_SERVICE = "local-grip:8201"
 NGINX_PATH = "graphql"
+PROTOBUF_PATH = "v1/graph"
+
 
 def bulk_load(graph_name: str, project_id: str, directory_path: str, output: dict, access_token: str) -> List[dict]:
     """Loads a directory of .ndjson or .gz files to grip.
@@ -185,8 +189,6 @@ def add_graph(graph_name: str, project_id: str, output: dict, access_token: str)
     return json_data
 
 
-
-
 def drop_graph(graph_name: str, project_id: str, output: dict, access_token: str) -> dict:
     """Deletes a graph and all of its data"""
 
@@ -218,3 +220,32 @@ def delete_project(graph_name: str, project_id: str, output: dict, access_token:
     json_data = response.json()
     output["logs"].append(f"proj-delete response: {json_data}")
     return json_data
+
+
+def proto_stream_query(graph_name: str, query: dict) -> Generator[dict, None, None]:
+    """Get all records for an vertex type.
+        This function uses the internal protobuf API instead of the plugin API
+            Ex query dict for getting all of the Observation vertices:
+                data = {
+                        "query": [
+                            {"v": []},
+                            {"hasLabel": ["Observation"]}
+                        ]
+                    }
+    """
+
+    response = requests.post(
+        f"http://{GRIP_SERVICE}/{PROTOBUF_PATH}/{graph_name}/query",
+        data=orjson.dumps(query),
+    )
+    def stream_protobuf_res(response):
+        for result in response.iter_lines(chunk_size=None):
+            try:
+                result_dict = orjson.loads(result.decode())
+            except Exception as e:
+                print("Failed to decode: %s", result)
+                raise e
+
+            yield result_dict["vertex"]["data"]
+
+    return stream_protobuf_res(response)
