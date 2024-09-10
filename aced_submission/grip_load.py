@@ -225,7 +225,7 @@ def delete_project(graph_name: str, project_id: str, output: dict, access_token:
 def proto_stream_query(graph_name: str, query: dict) -> Generator[dict, None, None]:
     """Get all records for an vertex type.
         This function uses the internal protobuf API instead of the plugin API
-            Ex query dict for getting all of the Observation vertices:
+            For example query dict for getting all of the Observation vertices:
                 data = {
                         "query": [
                             {"v": []},
@@ -249,3 +249,25 @@ def proto_stream_query(graph_name: str, query: dict) -> Generator[dict, None, No
             yield result_dict["vertex"]["data"]
 
     return stream_protobuf_res(response)
+
+
+def list_labels(graph_name: str) -> dict:
+    """Get all of the edge and vertex labels for a given graph.
+        Label names are based off of FHIR vertex and edge names
+        Example response:
+            {'vertexLabels':
+                  ['BodyStructure', 'Condition', 'DocumentReference', 'Observation',
+                   'Organization', 'Patient', 'ResearchStudy', 'ResearchSubject', 'Specimen'],
+             'edgeLabels':
+                  ['body_structure', 'condition', 'document_reference',
+                   'focus_DocumentReference', 'focus_Specimen', 'focus_observation',
+                   'parent', 'parent_specimen', 'partOf', 'partOf_research_study',
+                   'patient', 'research_subject', 'specimen', 'specimen_Specimen',
+                   'specimen_observation', 'study', 'subject_Patient',
+                   'subject_Specimen', 'subject_observation']
+            }
+    """
+    response = requests.get(
+        f"http://{GRIP_SERVICE}/{PROTOBUF_PATH}/{graph_name}/label"
+    )
+    return response.json()
