@@ -222,6 +222,26 @@ def delete_project(graph_name: str, project_id: str, output: dict, access_token:
     return json_data
 
 
+def get_project_data(graph_name: str, project_id: str, output:dict, access_token: str)-> Generator[dict, None, None]:
+    """Retrieves all of the data for a given project id on a given graph"""
+    response = requests.get(
+        f"http://{GRIP_SERVICE}/{NGINX_PATH}/{graph_name}/get-vertices/{project_id}",
+        headers={"Authorization":f"bearer {access_token}"}
+    )
+    def stream_res(response):
+        for result in response.iter_lines(chunk_size=None):
+            try:
+                result_dict = orjson.loads(result.decode())
+            except Exception as e:
+                print("Failed to decode: %s", result)
+                raise e
+            yield result_dict["data"]
+
+    return stream_res(response)
+
+
+"""WARNING The functions below use the GRIP protobuf API directly and bipass Auth checks
+            and should not be used for Gen3 Purposes."""
 def proto_stream_query(graph_name: str, query: dict) -> Generator[dict, None, None]:
     """Get all records for an vertex type.
         This function uses the internal protobuf API instead of the plugin API
@@ -238,6 +258,7 @@ def proto_stream_query(graph_name: str, query: dict) -> Generator[dict, None, No
         f"http://{GRIP_SERVICE}/{PROTOBUF_PATH}/{graph_name}/query",
         data=orjson.dumps(query),
     )
+
     def stream_protobuf_res(response):
         for result in response.iter_lines(chunk_size=None):
             try:
@@ -245,7 +266,6 @@ def proto_stream_query(graph_name: str, query: dict) -> Generator[dict, None, No
             except Exception as e:
                 print("Failed to decode: %s", result)
                 raise e
-
             yield result_dict["vertex"]["data"]
 
     return stream_protobuf_res(response)
