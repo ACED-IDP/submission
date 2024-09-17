@@ -122,7 +122,6 @@ def discovery_load(project_id: str, _subjects_count: int, description: str, loca
     except requests.exceptions.HTTPError as e:
         print(str(e))
 
-
     """TODO old code for loading discovery page. Repurpose if we implement discovery page
     in FF
 

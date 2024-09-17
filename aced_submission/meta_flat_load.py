@@ -16,7 +16,6 @@ from typing import Dict, Iterator, Any, Generator, List
 
 import click
 from dateutil.parser import parse
-from dateutil import tz
 from gen3_tracker.meta.dataframer import LocalFHIRDatabase
 import orjson
 from opensearchpy import OpenSearch as Elasticsearch
@@ -72,7 +71,7 @@ def generate_elasticsearch_mapping(df: List[Dict]) -> Dict[str, Any]:
 
     def is_integer_dtype(value: Any) -> bool:
         return isinstance(value, int) and value.bit_length() <= 32 and not isinstance(value, bool)
-    
+
     def is_long_dtype(value: Any) -> bool:
         return isinstance(row[column], int) and row[column].bit_length() > 32
 
@@ -126,7 +125,7 @@ def generate_elasticsearch_mapping(df: List[Dict]) -> Dict[str, Any]:
                     mapping["mappings"]["properties"][column] = {"type": "keyword"}
             elif isinstance(row[column], str):
                 mapping["mappings"]["properties"][column] = {"type": "keyword"}
-    
+
     return mapping
 
 
@@ -218,9 +217,9 @@ def write_bulk_http(elastic, index, limit, doc_type, generator) -> None:
 
     logger.info(f'Writing bulk to {index} limit {limit}.')
     _ = bulk(client=elastic,
-                       actions=(d for d in _bulker(generator)),
-                       request_timeout=120,
-                       max_retries=5)
+             actions=(d for d in _bulker(generator)),
+             request_timeout=120,
+             max_retries=5)
 
     return
 
@@ -232,6 +231,7 @@ def resource_generator(project_id, generator) -> Iterator[Dict]:
         resource['project_id'] = project_id
         resource["auth_resource_path"] = f"/programs/{program}/projects/{project}"
         yield resource
+
 
 @lru_cache(maxsize=1024 * 10)
 def fetch_denormalized_patient(connection, patient_id):
@@ -539,7 +539,7 @@ def load_flat(project_id: str, index: str, generator: Generator[dict, None, None
                             generator=loading_generator)
 
     load_index(elastic=elastic, output_path=output_path, es_index=f"{ES_INDEX_PREFIX}_{index}_0",
-                alias=index, doc_type=index, limit=limit)
+               alias=index, doc_type=index, limit=limit)
 
 
 def chunk(arr_range, arr_size):
