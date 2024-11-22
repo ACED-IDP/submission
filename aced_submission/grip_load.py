@@ -24,9 +24,6 @@ def bulk_load(grip_service: str, graph_name: str, project_id: str, directory_pat
     response_json = []
 
     # List graphs and check to see if graph name is amoung the graphs listed
-    exists = graph_exists(grip_service, graph_name, output, access_token)
-    assert exists, output["logs"].append(f"ERROR: graph {graph_name} not found in grip")
-
     output["logs"].append(f"loading files into {graph_name} from {directory_path}")
 
     assert os.path.isdir(directory_path), output["logs"].append(f"directory path {directory_path} is not a directory")
@@ -55,13 +52,8 @@ def bulk_load(grip_service: str, graph_name: str, project_id: str, directory_pat
 
     return response_json
 
+
 def bulk_load_raw(grip_service: str, graph_name: str, project_id: str, ndjson_file_path: str, output: dict, access_token: str) -> dict:
-    data_graph_exists = graph_exists(grip_service, graph_name, output, access_token)
-    assert data_graph_exists, output["logs"].append(f"ERROR: graph {graph_name} not found in grip")
-
-    schema_graph_exists = graph_exists(grip_service, graph_name+"__schema__", output, access_token)
-    assert schema_graph_exists, output["logs"].append(f"ERROR: schema graph {graph_name}__schema__ not found in grip")
-
     output["logs"].append(f"loading files into {graph_name} from {ndjson_file_path}")
     assert os.path.isfile(ndjson_file_path), output["logs"].append(f"file path {ndjson_file_path} is not a file")
 
@@ -74,9 +66,8 @@ def bulk_load_raw(grip_service: str, graph_name: str, project_id: str, ndjson_fi
         )
 
     json_data = response.json()
-    output["logs"].append(f"json data: {json_data}")
+    output["logs"].append(json_data)
     return json_data
-
 
 
 def bulk_delete(grip_service: str, graph_name: str, vertices: List[str], project_id: str,  edges: List[str], output: dict, access_token: str) -> dict:
