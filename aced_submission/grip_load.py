@@ -24,9 +24,6 @@ def bulk_load(grip_service: str, graph_name: str, project_id: str, directory_pat
     response_json = []
 
     # List graphs and check to see if graph name is amoung the graphs listed
-    exists = graph_exists(grip_service, graph_name, output, access_token)
-    assert exists, output["logs"].append(f"ERROR: graph {graph_name} not found in grip")
-
     output["logs"].append(f"loading files into {graph_name} from {directory_path}")
 
     assert os.path.isdir(directory_path), output["logs"].append(f"directory path {directory_path} is not a directory")
@@ -54,6 +51,23 @@ def bulk_load(grip_service: str, graph_name: str, project_id: str, directory_pat
         output["logs"].append(f"json data: {json_data}")
 
     return response_json
+
+
+def bulk_load_raw(grip_service: str, graph_name: str, project_id: str, ndjson_file_path: str, output: dict, access_token: str) -> dict:
+    output["logs"].append(f"loading files into {graph_name} from {ndjson_file_path}")
+    assert os.path.isfile(ndjson_file_path), output["logs"].append(f"file path {ndjson_file_path} is not a file")
+
+    with open(ndjson_file_path, 'r') as file_io:
+        files = {'file': (ndjson_file_path, file_io)}
+        response = requests.post(
+            f"http://{grip_service}:8201/{NGINX_PATH}/{graph_name}/bulk-load-raw/{project_id}",
+            headers={"Authorization": f"bearer {access_token}"},
+            files=files
+        )
+
+    json_data = response.json()
+    output["logs"].append(json_data)
+    return json_data
 
 
 def bulk_delete(grip_service: str, graph_name: str, vertices: List[str], project_id: str,  edges: List[str], output: dict, access_token: str) -> dict:
@@ -158,16 +172,18 @@ def list_graphs(grip_service: str, output: dict, access_token: str) -> dict:
     return json_data
 
 
-def add_schema(grip_service: str, graph_name: str, schema_path: str, project_id: str, output: dict, access_token: str) -> dict:
-    """Adds a schema to a graph in grip. NOTE: currently the schema that is attached to the graph
-    is whatever graph is specified with the '"graph": "ESCA"' at the top of the schema file,
-    not the graph_name that is specified"""
+def add_schema(grip_service: str, graph_name: str, schema_path: str, project_id: str, output: dict, access_token: str, json_schema: bool) -> dict:
+    """Adds a schema to a graph in grip. If json_schema is specified then a json_schema file should be used for schema_path.
+            if json_schema flag is not specified then normal grip schema format should be used."""
 
     assert os.path.isfile(schema_path), output["logs"].append(f"{schema_path} is not a file")
     with open(schema_path, 'rb') as file_io:
         files = {'file': (schema_path, file_io)}
+        path = f"http://{grip_service}:8201/{NGINX_PATH}/{graph_name}/add-schema/{project_id}"
+        if json_schema:
+            path = f"http://{grip_service}:8201/{NGINX_PATH}/{graph_name}/add-json-schema/{project_id}"
         response = requests.post(
-            f"http://{grip_service}:8201/{NGINX_PATH}/{graph_name}/add-schema/{project_id}",
+            path,
             headers={"Authorization": f"bearer {access_token}"},
             files=files
         )
