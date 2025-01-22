@@ -68,12 +68,11 @@ def generate_elasticsearch_mapping(df: List[Dict]) -> Dict[str, Any]:
     Returns:
         Dict[str, Any]: The generated Elasticsearch mapping.
     """
-
     def is_integer_dtype(value: Any) -> bool:
         return isinstance(value, int) and value.bit_length() <= 32 and not isinstance(value, bool)
 
     def is_long_dtype(value: Any) -> bool:
-        return isinstance(row[column], int) and row[column].bit_length() > 32
+        return isinstance(value, int) and value.bit_length() > 32
 
     def is_float_dtype(value: Any) -> bool:
         return isinstance(value, float)
@@ -108,10 +107,12 @@ def generate_elasticsearch_mapping(df: List[Dict]) -> Dict[str, Any]:
     # for the guppy schema types
     for row in df:
         for column in row.keys():
-            if is_integer_dtype(row[column]):
-                mapping["mappings"]["properties"][column] = {"type": "integer"}
-            elif is_long_dtype(row[column]):
+            if is_long_dtype(row[column]):
                 mapping["mappings"]["properties"][column] = {"type": "long"}
+            elif is_integer_dtype(row[column]):
+                if column in mapping["mappings"]["properties"] and mapping["mappings"]["properties"][column]["type"] == "long":
+                    continue
+                mapping["mappings"]["properties"][column] = {"type": "integer"}
             elif is_float_dtype(row[column]):
                 mapping["mappings"]["properties"][column] = {"type": "float"}
             elif is_bool_dtype(row[column]):
