@@ -251,7 +251,7 @@ def get_project_data(grip_service: str, graph_name: str, project_id: str, output
             except Exception as e:
                 print("Failed to decode: %s", result)
                 raise e
-            yield result_dict["data"]
+            yield result_dict
 
     return stream_res(response)
 
