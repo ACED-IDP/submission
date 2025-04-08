@@ -248,10 +248,16 @@ def get_project_data(grip_service: str, graph_name: str, project_id: str, output
         for result in response.iter_lines(chunk_size=None):
             try:
                 result_dict = orjson.loads(result.decode())
+                # Elastic doesn't like '_' prefix fields. Need to sanitize them before passing to elastic
+                result_dict["id"] = result_dict["_id"]
+                result_dict["label"] = result_dict["_label"]
+                result_dict.pop("_id")
+                result_dict.pop("_label")
+                yield result_dict
             except Exception as e:
                 print("Failed to decode: %s", result)
                 raise e
-            yield result_dict
+
 
     return stream_res(response)
 
