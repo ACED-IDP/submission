@@ -237,29 +237,27 @@ def delete_project(grip_service: str, graph_name: str, project_id: str, output: 
     return json_data
 
 
-def get_project_data(grip_service: str, graph_name: str, project_id: str, output: dict, access_token: str) -> Generator[dict, None, None]:
+def get_project_data(grip_service: str, graph_name: str, project_id: str, output: dict, access_token: str, chunk_size: int) -> Generator[dict, None, None]:
     """Retrieves all of the data for a given project id on a given graph"""
     response = requests.get(
         f"http://{grip_service}:8201/{NGINX_PATH}/{graph_name}/get-vertices/{project_id}",
         headers={"Authorization": f"bearer {access_token}"}
     )
 
-    def stream_res(response):
-        for result in response.iter_lines(chunk_size=None):
-            try:
-                result_dict = orjson.loads(result.decode())
-                # Elastic doesn't like '_' prefix fields. Need to sanitize them before passing to elastic
-                result_dict["id"] = result_dict["_id"]
-                result_dict["label"] = result_dict["_label"]
-                result_dict.pop("_id")
-                result_dict.pop("_label")
-                yield result_dict
-            except Exception as e:
-                print("Failed to decode: %s", result)
-                raise e
+    for result in response.iter_lines(chunk_size=chunk_size):
+        try:
+            result_dict = orjson.loads(result.decode())
+            # Elastic doesn't like '_' prefix fields. Need to sanitize them before passing to elastic
+            result_dict["id"] = result_dict["_id"]
+            result_dict["label"] = result_dict["_label"]
+            result_dict.pop("_id")
+            result_dict.pop("_label")
+            yield result_dict
+        except Exception as e:
+            print("Failed to decode: %s", result)
+            raise e
 
-
-    return stream_res(response)
+    return
 
 
 """WARNING The functions below use the GRIP protobuf API directly and bipass Auth checks
