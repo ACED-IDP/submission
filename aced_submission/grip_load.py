@@ -4,7 +4,7 @@ import requests
 from typing import List, Generator
 
 
-NGINX_PATH = "writer"
+NGINX_PATH = "grip/writer"
 PROTOBUF_PATH = "v1/graph"
 
 
