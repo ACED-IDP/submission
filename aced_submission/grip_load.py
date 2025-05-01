@@ -4,14 +4,14 @@ import requests
 from typing import List, Generator
 
 
-NGINX_PATH = "writer"
+NGINX_PATH = "grip/writer"
 PROTOBUF_PATH = "v1/graph"
 
 
-def bulk_load(grip_service: str, graph_name: str, project_id: str, directory_path: str, output: dict, access_token: str) -> List[dict]:
+def bulk_load(hostname: str, graph_name: str, project_id: str, directory_path: str, output: dict, access_token: str) -> List[dict]:
     """Loads a directory of .ndjson or .gz files to grip.
         Args:
-                grip_service: The name of the k8s service that refers to the internal cluster-ip for the running grip deployment
+                hostname: The hostname of the gen3 instance that will be written to
                 graph_name: The name of the graph
                 project_id: the Gen3 program-project to be used
                 directory_path: the file path to the directory that contains the FHIR files
@@ -40,7 +40,7 @@ def bulk_load(grip_service: str, graph_name: str, project_id: str, directory_pat
         with open(file_path, 'rb') as file_io:
             files = {'file': (file_path, file_io)}
             response = requests.post(
-                f"http://{grip_service}:8201/{NGINX_PATH}/{graph_name}/bulk-load/{project_id}",
+                f"{hostname}/{NGINX_PATH}/{graph_name}/bulk-load/{project_id}",
                 data={"types": graph_component},
                 headers={"Authorization": f"bearer {access_token}"},
                 files=files
@@ -53,14 +53,14 @@ def bulk_load(grip_service: str, graph_name: str, project_id: str, directory_pat
     return response_json
 
 
-def bulk_load_raw(grip_service: str, graph_name: str, project_id: str, ndjson_file_path: str, output: dict, access_token: str) -> dict:
+def bulk_load_raw(hostname: str, graph_name: str, project_id: str, ndjson_file_path: str, output: dict, access_token: str) -> dict:
     output["logs"].append(f"loading files into {graph_name} from {ndjson_file_path}")
     assert os.path.isfile(ndjson_file_path), output["logs"].append(f"file path {ndjson_file_path} is not a file")
 
     with open(ndjson_file_path, 'r') as file_io:
         files = {'file': (ndjson_file_path, file_io)}
         response = requests.post(
-            f"http://{grip_service}:8201/{NGINX_PATH}/{graph_name}/bulk-load-raw/{project_id}",
+            f"{hostname}/{NGINX_PATH}/{graph_name}/bulk-load-raw/{project_id}",
             headers={"Authorization": f"bearer {access_token}"},
             files=files
         )
@@ -70,7 +70,7 @@ def bulk_load_raw(grip_service: str, graph_name: str, project_id: str, ndjson_fi
     return json_data
 
 
-def bulk_delete(grip_service: str, graph_name: str, vertices: List[str], project_id: str,  edges: List[str], output: dict, access_token: str) -> dict:
+def bulk_delete(hostname: str, graph_name: str, vertices: List[str], project_id: str,  edges: List[str], output: dict, access_token: str) -> dict:
     """Deletes graph elements from a grip graph.
         Args:
             graph_name: The name of the graph
@@ -82,7 +82,7 @@ def bulk_delete(grip_service: str, graph_name: str, vertices: List[str], project
             "vertices": vertices,
             "edges": edges
             }
-    response = requests.delete(f"http://{grip_service}:8201/{NGINX_PATH}/{graph_name}/bulk-delete/{project_id}",
+    response = requests.delete(f"{hostname}/{NGINX_PATH}/{graph_name}/bulk-delete/{project_id}",
                                data=orjson.dumps(data),
                                headers={"Authorization": f"bearer {access_token}"}
                                )
@@ -93,9 +93,9 @@ def bulk_delete(grip_service: str, graph_name: str, vertices: List[str], project
     return json_data
 
 
-def delete_edge(grip_service: str, graph_name: str, edge_id: str, project_id: str, output: dict, access_token: str) -> dict:
+def delete_edge(hostname: str, graph_name: str, edge_id: str, project_id: str, output: dict, access_token: str) -> dict:
     """Deletes one edge from the specified graph"""
-    response = requests.delete(f"http://{grip_service}:8201/{NGINX_PATH}/{graph_name}/del-edge/{project_id}/{edge_id}",
+    response = requests.delete(f"{hostname}/{NGINX_PATH}/{graph_name}/del-edge/{project_id}/{edge_id}",
                                headers={"Authorization": f"bearer {access_token}"}
                                )
 
@@ -105,9 +105,9 @@ def delete_edge(grip_service: str, graph_name: str, edge_id: str, project_id: st
     return json_data
 
 
-def delete_vertex(grip_service: str, graph_name: str, vertex_id: str, project_id: str, output: dict, access_token: str) -> dict:
+def delete_vertex(hostname: str, graph_name: str, vertex_id: str, project_id: str, output: dict, access_token: str) -> dict:
     """Deletes one vertex from the specified graph"""
-    response = requests.delete(f"http://{grip_service}:8201/{NGINX_PATH}/{graph_name}/del-vertex/{project_id}/{vertex_id}",
+    response = requests.delete(f"{hostname}/{NGINX_PATH}/{graph_name}/del-vertex/{project_id}/{vertex_id}",
                                headers={"Authorization": f"bearer {access_token}"}
                                )
 
@@ -117,7 +117,7 @@ def delete_vertex(grip_service: str, graph_name: str, vertex_id: str, project_id
     return json_data
 
 
-def add_vertex(grip_service: str, graph_name: str, vertex: dict, project_id: str, output: dict, access_token: str) -> dict:
+def add_vertex(hostname: str, graph_name: str, vertex: dict, project_id: str, output: dict, access_token: str) -> dict:
     """Adds one vertex to the specified graph
         required vertex format:
             {
@@ -126,7 +126,7 @@ def add_vertex(grip_service: str, graph_name: str, vertex: dict, project_id: str
                 "data": dict, vertex properties.
             }
     """
-    response = requests.post(f"http://{grip_service}:8201/{NGINX_PATH}/{graph_name}/add-vertex/{project_id}/{vertex['gid']}",
+    response = requests.post(f"{hostname}/{NGINX_PATH}/{graph_name}/add-vertex/{project_id}/{vertex['gid']}",
                              headers={"Authorization": f"bearer {access_token}"},
                              json=vertex
                              )
@@ -137,7 +137,7 @@ def add_vertex(grip_service: str, graph_name: str, vertex: dict, project_id: str
     return json_data
 
 
-def add_edge(grip_service: str, graph_name: str, edge: dict, project_id: str, output: dict, access_token: str) -> dict:
+def add_edge(hostname: str, graph_name: str, edge: dict, project_id: str, output: dict, access_token: str) -> dict:
     """Adds one edge to the specified graph
         required edge format:
             {
@@ -148,7 +148,7 @@ def add_edge(grip_service: str, graph_name: str, edge: dict, project_id: str, ou
                 "data": dict, optional edge properties.
             }
     """
-    response = requests.post(f"http://{grip_service}:8201/{NGINX_PATH}/{graph_name}/add-edge/{project_id}/{edge['gid']}",
+    response = requests.post(f"{hostname}/{NGINX_PATH}/{graph_name}/add-edge/{project_id}/{edge['gid']}",
                              headers={"Authorization": f"bearer {access_token}"},
                              json=edge
                              )
@@ -159,9 +159,9 @@ def add_edge(grip_service: str, graph_name: str, edge: dict, project_id: str, ou
     return json_data
 
 
-def list_graphs(grip_service: str, output: dict, access_token: str) -> dict:
+def list_graphs(hostname: str, output: dict, access_token: str) -> dict:
     """Returns a list of all graph names in grip"""
-    response = requests.get(f"http://{grip_service}:8201/{NGINX_PATH}/list-graphs",
+    response = requests.get(f"{hostname}/{NGINX_PATH}/list-graphs",
                             headers={"Authorization": f"bearer {access_token}"}
                             )
 
@@ -172,16 +172,16 @@ def list_graphs(grip_service: str, output: dict, access_token: str) -> dict:
     return json_data
 
 
-def add_schema(grip_service: str, graph_name: str, schema_path: str, project_id: str, output: dict, access_token: str, json_schema: bool) -> dict:
+def add_schema(hostname: str, graph_name: str, schema_path: str, project_id: str, output: dict, access_token: str, json_schema: bool) -> dict:
     """Adds a schema to a graph in grip. If json_schema is specified then a json_schema file should be used for schema_path.
             if json_schema flag is not specified then normal grip schema format should be used."""
 
     assert os.path.isfile(schema_path), output["logs"].append(f"{schema_path} is not a file")
     with open(schema_path, 'rb') as file_io:
         files = {'file': (schema_path, file_io)}
-        path = f"http://{grip_service}:8201/{NGINX_PATH}/{graph_name}/add-schema/{project_id}"
+        path = f"{hostname}/{NGINX_PATH}/{graph_name}/add-schema/{project_id}"
         if json_schema:
-            path = f"http://{grip_service}:8201/{NGINX_PATH}/{graph_name}/add-json-schema/{project_id}"
+            path = f"{hostname}/{NGINX_PATH}/{graph_name}/add-json-schema/{project_id}"
         response = requests.post(
             path,
             headers={"Authorization": f"bearer {access_token}"},
@@ -193,10 +193,10 @@ def add_schema(grip_service: str, graph_name: str, schema_path: str, project_id:
     return json_data
 
 
-def add_graph(grip_service: str, graph_name: str, project_id: str, output: dict, access_token: str) -> dict:
+def add_graph(hostname: str, graph_name: str, project_id: str, output: dict, access_token: str) -> dict:
     """Creates a new graph"""
 
-    response = requests.post(f"http://{grip_service}:8201/{NGINX_PATH}/{graph_name}/add-graph/{project_id}",
+    response = requests.post(f"{hostname}/{NGINX_PATH}/{graph_name}/add-graph/{project_id}",
                              headers={"Authorization": f"bearer {access_token}"})
 
     json_data = response.json()
@@ -204,14 +204,14 @@ def add_graph(grip_service: str, graph_name: str, project_id: str, output: dict,
     return json_data
 
 
-def drop_graph(grip_service: str, graph_name: str, project_id: str, output: dict, access_token: str) -> dict:
+def drop_graph(hostname: str, graph_name: str, project_id: str, output: dict, access_token: str) -> dict:
     """Deletes a graph and all of its data"""
 
-    exists = graph_exists(grip_service, graph_name, output, access_token)
+    exists = graph_exists(hostname, graph_name, output, access_token)
     # Not going to get a grip error if you attempt to delete something that doesn't exist it grip,
     # But it might be good to still have an assert statement here to catch the fact that the graph doesn't exist
     assert exists, output["logs"].append(f"Graph {graph_name} does not exist in grip")
-    response = requests.delete(f"http://{grip_service}:8201/{NGINX_PATH}/{graph_name}/del-graph/{project_id}",
+    response = requests.delete(f"{hostname}/{NGINX_PATH}/{graph_name}/del-graph/{project_id}",
                                headers={"Authorization": f"bearer {access_token}"})
 
     json_data = response.json()
@@ -219,16 +219,16 @@ def drop_graph(grip_service: str, graph_name: str, project_id: str, output: dict
     return json_data
 
 
-def graph_exists(grip_service: str, graph_name: str, output: dict, access_token: str) -> bool:
+def graph_exists(hostname: str, graph_name: str, output: dict, access_token: str) -> bool:
     """Check to see if the provided graph name exists in grip"""
-    existing_graphs = list_graphs(grip_service, output, access_token)["data"]["graphs"]
+    existing_graphs = list_graphs(hostname, output, access_token)["data"]["graphs"]
     return graph_name in existing_graphs
 
 
-def delete_project(grip_service: str, graph_name: str, project_id: str, output: dict, access_token: str) -> dict:
+def delete_project(hostname: str, graph_name: str, project_id: str, output: dict, access_token: str) -> dict:
     """Delete a gen3 project entirely from a grip graph"""
     response = requests.delete(
-            f"http://{grip_service}:8201/{NGINX_PATH}/{graph_name}/proj-delete/{project_id}",
+            f"{hostname}/{NGINX_PATH}/{graph_name}/proj-delete/{project_id}",
             headers={"Authorization": f"bearer {access_token}"},
             )
 
@@ -237,10 +237,10 @@ def delete_project(grip_service: str, graph_name: str, project_id: str, output: 
     return json_data
 
 
-def get_project_data(grip_service: str, graph_name: str, project_id: str, output: dict, access_token: str, chunk_size: int) -> Generator[dict, None, None]:
+def get_project_data(hostname: str, graph_name: str, project_id: str, output: dict, access_token: str, chunk_size: int) -> Generator[dict, None, None]:
     """Retrieves all of the data for a given project id on a given graph"""
     response = requests.get(
-        f"http://{grip_service}:8201/{NGINX_PATH}/{graph_name}/get-vertices/{project_id}",
+        f"{hostname}/{NGINX_PATH}/{graph_name}/get-vertices/{project_id}",
         headers={"Authorization": f"bearer {access_token}"}
     )
 
