@@ -25,7 +25,7 @@ joblib
 beautifulsoup4
 
 # postgres
-psycopg2-binary
+psycopg2-binary==2.9.7
 
 # modern plug compatible with elasticsearch
 opensearch-py==2.4.2
