@@ -33,14 +33,14 @@ if k8s_elastic:
     DEFAULT_ELASTIC = f"http://{k8s_elastic.replace('tcp://', '')}"
 
 # TODO - fix me should be gen3.aced-idp.org but we need to coordinate with gitops.json
-ES_INDEX_PREFIX = "gen3.aced.io"
+ES_INDEX_PREFIX = "calypr"
 
-ACED_NAMESPACE = uuid.uuid3(uuid.NAMESPACE_DNS, 'aced-ipd.org')
+CALYPR_NAMESPACE = uuid.uuid3(uuid.NAMESPACE_DNS, 'calypr.ohsu.edu')
 
 
 def create_id(key: str) -> str:
     """Create an idempotent ID from the input string."""
-    return str(uuid.uuid5(ACED_NAMESPACE, key))
+    return str(uuid.uuid5(CALYPR_NAMESPACE, key))
 
 
 def read_ndjson(path: str) -> Iterator[Dict]:
@@ -201,6 +201,7 @@ def write_bulk_http(elastic, index, limit, doc_type, generator) -> None:
     counter = 0
 
     def _bulker(generator_, counter_=counter):
+        idx_name = f"{index[len(ES_INDEX_PREFIX)+1:-1]}id"
         for dict_ in generator_:
             if limit and counter_ > limit:
                 break  # for testing
@@ -209,7 +210,7 @@ def write_bulk_http(elastic, index, limit, doc_type, generator) -> None:
                 '_op_type': 'index',
                 '_source': dict_,
                 # use the id from the FHIR object to upsert information
-                '_id': dict_['id']
+                '_id': idx_name
             }
             counter_ += 1
             if counter_ % 10000 == 0:
@@ -326,12 +327,15 @@ def write_flat_file(output_path, index, doc_type, limit, generator):
     """Write the flat model to a file."""
     counter_ = 0
     pathlib.Path(output_path).mkdir(parents=True, exist_ok=True)
+
+    # The +1 and -1 indexing is for the '_' spacer chars
+    idx_name = f"{index[len(ES_INDEX_PREFIX)+1:-1]}id"
     with open(f"{output_path}/{doc_type}.ndjson", "wb") as fp:
         for dict_ in generator:
             fp.write(
                 orjson.dumps(
                     {
-                        'id': dict_['id'],
+                        'id': dict_[idx_name],
                         'object': dict_,
                         'name': doc_type,
                         'relations': []
