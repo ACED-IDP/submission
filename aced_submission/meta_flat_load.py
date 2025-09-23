@@ -74,10 +74,9 @@ def infer_es_field(value: Any, existing_type: str | None = None) -> Dict[str, An
     if is_long_dtype(value):
         return {"type": "long"}
     elif is_integer_dtype(value):
-        # Respect existing 'long' type to avoid conflicts
-        if existing_type == "long":
-            return {"type": "long"}
-        return {"type": "integer"}
+        # No way to know what will be an integer an what will be a
+        # long in the future as more datasets are added to the dataframe so declare it a long
+        return {"type": "long"}
     elif is_float_dtype(value):
         return {"type": "float"}
     elif is_bool_dtype(value):
