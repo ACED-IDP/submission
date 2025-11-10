@@ -19,7 +19,7 @@ from dateutil.parser import parse
 from gen3_tracker.meta.dataframer import LocalFHIRDatabase
 import orjson
 from opensearchpy import OpenSearch as Elasticsearch
-from opensearchpy.exceptions import NotFoundError
+from opensearchpy.exceptions import NotFoundError, OpenSearchException
 from opensearchpy.helpers import bulk
 
 logging.basicConfig(level=logging.INFO)
@@ -33,14 +33,7 @@ if k8s_elastic:
     DEFAULT_ELASTIC = f"http://{k8s_elastic.replace('tcp://', '')}"
 
 # TODO - fix me should be gen3.aced-idp.org but we need to coordinate with gitops.json
-ES_INDEX_PREFIX = "gen3.aced.io"
-
-ACED_NAMESPACE = uuid.uuid3(uuid.NAMESPACE_DNS, 'aced-ipd.org')
-
-
-def create_id(key: str) -> str:
-    """Create an idempotent ID from the input string."""
-    return str(uuid.uuid5(ACED_NAMESPACE, key))
+ES_INDEX_PREFIX = "calypr"
 
 
 def read_ndjson(path: str) -> Iterator[Dict]:
@@ -50,84 +43,52 @@ def read_ndjson(path: str) -> Iterator[Dict]:
             yield json.loads(l_)
 
 
-def read_tsv(path: str) -> Iterator[Dict]:
-    """Read tsv file line by line."""
-    with open(path) as tsv_file:
-        reader = csv.DictReader(tsv_file, delimiter="\t")
-        for row in reader:
-            yield row
+def is_integer_dtype(value: Any) -> bool:
+    return isinstance(value, int) and value.bit_length() <= 32 and not isinstance(value, bool)
 
+def is_long_dtype(value: Any) -> bool:
+    return isinstance(value, int) and value.bit_length() > 32
 
-def generate_elasticsearch_mapping(df: List[Dict]) -> Dict[str, Any]:
-    """
-    Generates an Elasticsearch mapping from a "DataFrame".
+def is_float_dtype(value: Any) -> bool:
+    return isinstance(value, float)
 
-    Args:
-        df (Dict): A list of dict.
+def is_bool_dtype(value: Any) -> bool:
+    return isinstance(value, bool)
 
-    Returns:
-        Dict[str, Any]: The generated Elasticsearch mapping.
-    """
-    def is_integer_dtype(value: Any) -> bool:
-        return isinstance(value, int) and value.bit_length() <= 32 and not isinstance(value, bool)
+def is_datetime64_any_dtype(value: Any) -> bool:
+    try:
+        if not isinstance(value, str):
+            raise ValueError('Value is not a string')
+        parse(value, ignoretz=True)
+        return True
+    except (ValueError, OverflowError):
+        return False
 
-    def is_long_dtype(value: Any) -> bool:
-        return isinstance(value, int) and value.bit_length() > 32
+def is_object_dtype(value: Any) -> bool:
+    return isinstance(value, list) or isinstance(value, dict)
 
-    def is_float_dtype(value: Any) -> bool:
-        return isinstance(value, float)
+def infer_es_field(value: Any, existing_type: str | None = None) -> Dict[str, Any] | None:
+    """Infer Elasticsearch field mapping from a value, following provided type rules."""
+    if value is None:
+        return None
+    if is_long_dtype(value):
+        return {"type": "long"}
+    elif is_integer_dtype(value):
+        # No way to know what will be an integer an what will be a
+        # long in the future as more datasets are added to the dataframe so declare it a long
+        return {"type": "long"}
+    elif is_float_dtype(value):
+        return {"type": "float"}
+    elif is_bool_dtype(value):
+        return {"type": "keyword"}
+    elif is_datetime64_any_dtype(value):
+        return {"type": "keyword"}  # Note: Original code uses keyword, not date
+    elif is_object_dtype(value):
+        return {"type": "keyword"}  # Lists and dicts mapped to keyword
+    elif isinstance(value, str):
+        return {"type": "keyword"}
+    return None
 
-    def is_bool_dtype(value: Any) -> bool:
-        return isinstance(value, bool)
-
-    def is_datetime64_any_dtype(value: Any) -> bool:
-        try:
-            if not isinstance(value, str):
-                raise ValueError('Value is not a string')
-            parse(value, ignoretz=True)
-            return True
-        except (ValueError, OverflowError):
-            return False
-
-    def is_object_dtype(value: Any) -> bool:
-        return isinstance(value, list) or isinstance(value, dict)
-
-    dynamic_templates = [
-         {
-             "strings": {
-                 "match_mapping_type": "string",
-                 "mapping": {
-                     "type": "keyword"
-                 }
-             }
-         }
-    ]
-    mapping = {"mappings": {"properties": {}, 'dynamic_templates': dynamic_templates}}
-    # see https://github.com/uc-cdis/guppy/blob/f5bb705dae6f3417e471ba2e43ce4b61ba5026fb/src/server/schema.js#L4
-    # for the guppy schema types
-    for row in df:
-        for column in row.keys():
-            if is_long_dtype(row[column]):
-                mapping["mappings"]["properties"][column] = {"type": "long"}
-            elif is_integer_dtype(row[column]):
-                if column in mapping["mappings"]["properties"] and mapping["mappings"]["properties"][column]["type"] == "long":
-                    continue
-                mapping["mappings"]["properties"][column] = {"type": "integer"}
-            elif is_float_dtype(row[column]):
-                mapping["mappings"]["properties"][column] = {"type": "float"}
-            elif is_bool_dtype(row[column]):
-                mapping["mappings"]["properties"][column] = {"type": "keyword"}
-            elif is_datetime64_any_dtype(row[column]):
-                mapping["mappings"]["properties"][column] = {"type": "keyword"}
-            elif is_object_dtype(row[column]):
-                if isinstance(row[column], list):
-                    mapping["mappings"]["properties"][column] = {"type": "keyword"}
-                else:
-                    mapping["mappings"]["properties"][column] = {"type": "keyword"}
-            elif isinstance(row[column], str):
-                mapping["mappings"]["properties"][column] = {"type": "keyword"}
-
-    return mapping
 
 
 def write_array_aliases(doc_type, alias, elastic=DEFAULT_ELASTIC, name_space=ES_INDEX_PREFIX):
@@ -201,6 +162,7 @@ def write_bulk_http(elastic, index, limit, doc_type, generator) -> None:
     counter = 0
 
     def _bulker(generator_, counter_=counter):
+        idx_name = f"{index[len(ES_INDEX_PREFIX)+1:-1]}id"
         for dict_ in generator_:
             if limit and counter_ > limit:
                 break  # for testing
@@ -209,7 +171,7 @@ def write_bulk_http(elastic, index, limit, doc_type, generator) -> None:
                 '_op_type': 'index',
                 '_source': dict_,
                 # use the id from the FHIR object to upsert information
-                '_id': dict_['id']
+                '_id': dict_[idx_name]
             }
             counter_ += 1
             if counter_ % 10000 == 0:
@@ -223,6 +185,38 @@ def write_bulk_http(elastic, index, limit, doc_type, generator) -> None:
              max_retries=5)
 
     return
+
+
+def processing_generator(base_doc_gen: Generator[Dict, None, None],
+                        elastic: Elasticsearch,
+                        es_index: str,
+                        known_properties: Dict[str, Any],
+                        field_array: set,
+                        limit: int | None = None) -> Iterator[Dict]:
+    """Process documents: update mapping and collect array fields."""
+    counter = 0
+    for doc in base_doc_gen:
+        if limit and counter >= limit:
+            break
+        new_fields = {}
+        for k, v in doc.items():
+            if isinstance(v, list):
+                field_array.add(k)
+            if k not in known_properties:
+                field_type = infer_es_field(v, known_properties.get(k, {}).get("type"))
+                if field_type:
+                    new_fields[k] = field_type
+        if new_fields:
+            update_body = {"properties": new_fields}
+            try:
+                elastic.indices.put_mapping(index=es_index, body=update_body)
+                known_properties.update(new_fields)
+                logger.info(f"Added new fields to {es_index}: {list(new_fields.keys())}")
+            except OpenSearchException as e:
+                logger.error(f"Failed to update mapping: {str(e)}")
+                raise
+        yield doc
+        counter += 1
 
 
 def resource_generator(project_id, generator) -> Iterator[Dict]:
@@ -326,12 +320,15 @@ def write_flat_file(output_path, index, doc_type, limit, generator):
     """Write the flat model to a file."""
     counter_ = 0
     pathlib.Path(output_path).mkdir(parents=True, exist_ok=True)
+
+    # The +1 and -1 indexing is for the '_' spacer chars
+    idx_name = f"{index[len(ES_INDEX_PREFIX)+1:-1]}id"
     with open(f"{output_path}/{doc_type}.ndjson", "wb") as fp:
         for dict_ in generator:
             fp.write(
                 orjson.dumps(
                     {
-                        'id': dict_['id'],
+                        'id': dict_[idx_name],
                         'object': dict_,
                         'name': doc_type,
                         'relations': []
@@ -475,7 +472,7 @@ def _load_flat(input_path, project_id, data_type):
               )
 
 
-def load_flat(project_id: str, index: str, generator: Generator[dict, None, None], limit: str, elastic_url: str, output_path: str):
+def load_flat(project_id: str, index: str, generator: Generator[dict, None, None], limit: int | None, elastic_url: str, output_path: str):
     """Loads flattened FHIR data into Elasticsearch database. Replaces tube-lite"""
 
     if limit:
@@ -485,63 +482,49 @@ def load_flat(project_id: str, index: str, generator: Generator[dict, None, None
     assert elastic.ping(), f"Connection to {elastic_url} failed"
     index = index.lower()
 
-    def load_index(elastic: Elasticsearch, output_path: str, es_index: str, alias: str, doc_type: str, limit: int):
+    def load_index(elastic: Elasticsearch, output_path: str, es_index: str, alias: str, doc_type: str, limit: int | None):
         if not output_path:
-            # create the index and write data into it.
-
-            # since we need to read the generator twice, once to create the indices and once to write the data to ES
-            # Get the path of the temporary file
-            temp_path = tempfile.NamedTemporaryFile(delete=False).name
-            # just write the data to it
-            with open(temp_path, mode='w') as f:
-                for _ in generator:
-                    f.write(orjson.dumps(_).decode())
-                    f.write('\n')
-
-            loading_generator = resource_generator(project_id, ndjson_file_generator(temp_path))
-
+            # Initialize dynamic templates as per original mapping function
+            dynamic_templates = [
+                {
+                    "strings": {
+                        "match_mapping_type": "string",
+                        "mapping": {
+                            "type": "keyword"
+                        }
+                    }
+                }
+            ]
             if elastic.indices.exists(index=es_index):
                 logger.info(f"Index {es_index} exists.")
-
-                existing_mapping = elastic.indices.get_mapping(index=es_index)
-                assert es_index in existing_mapping, f"doc_type {es_index} not in {existing_mapping}"
-                existing_mapping = existing_mapping[es_index]
-
-                new_mapping = generate_elasticsearch_mapping(ndjson_file_generator(temp_path))
-                updates = compare_mapping(existing_mapping, new_mapping)
-                if updates != {}:
-                    update_body = {
-                        "properties": updates
-                    }
-                    elastic.indices.put_mapping(index=es_index, body=update_body)
-                    logger.info(f"Updated {es_index} with {updates}")
-                else:
-                    logger.info(f"No updates needed for {es_index}")
+                full_mapping = elastic.indices.get_mapping(index=es_index)
+                existing_properties = full_mapping[es_index]['mappings'].get('properties', {})
             else:
                 logger.info(f"Index {es_index} does not exist.")
-                mapping = generate_elasticsearch_mapping(ndjson_file_generator(temp_path))
-                elastic.indices.create(index=es_index, body=mapping)
+                elastic.indices.create(index=es_index, body={"mappings": {"dynamic_templates": dynamic_templates}})
                 logger.info(f"Created {es_index}")
+                existing_properties = {}
+
+            known_properties = existing_properties.copy()
+            field_array = set()
+
+            base_loading_gen = resource_generator(project_id, generator)
+            processed_gen = processing_generator(base_loading_gen, elastic, es_index, known_properties, field_array, limit)
 
             write_bulk_http(elastic=elastic, index=es_index, doc_type=doc_type, limit=limit,
-                            generator=loading_generator)
+                            generator=processed_gen)
 
-            field_array = set()
-            for _ in ndjson_file_generator(temp_path):
-                field_array.update([k for k, v in _.items() if isinstance(v, list)])
             field_array = list(field_array)
             setup_aliases(alias, doc_type, elastic, field_array, es_index)
 
-            pathlib.Path(temp_path).unlink()
-
         else:
             # write file path
+            loading_generator = resource_generator(project_id, generator)
             write_flat_file(output_path=output_path, index=es_index, doc_type=doc_type, limit=limit,
                             generator=loading_generator)
 
     load_index(elastic=elastic, output_path=output_path, es_index=f"{ES_INDEX_PREFIX}_{index}_0",
                alias=index, doc_type=index, limit=limit)
-
 
 def chunk(arr_range, arr_size):
     """Iterate in chunks."""
