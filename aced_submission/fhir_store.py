@@ -4,8 +4,10 @@ import pathlib
 import sys
 
 import click
+import opensearchpy as elasticsearch
 import yaml
-from elasticsearch import Elasticsearch
+from opensearchpy import OpenSearch as Elasticsearch
+from opensearchpy import OpenSearchException
 
 from aced_submission import NaturalOrderGroup
 from aced_submission.meta_flat_load import read_ndjson, write_bulk_http, DEFAULT_ELASTIC
@@ -29,21 +31,22 @@ def resource_generator(project_id, file_path):
         _["auth_resource_path"] = f"/programs/{program}/projects/{project}"
         yield _
 
+
 def fhir_put(project_id, path, elastic_url) -> list[str]:
     """Upsert FHIR resources to a FHIR store."""
     assert project_id.count('-') == 1, f"{project_id} should have a single '-' separating program and project"
 
-    elastic = Elasticsearch([elastic_url], request_timeout=120)
+    elastic = Elasticsearch([elastic_url], request_timeout=120, max_retries=5)
 
-    index = doc_type ='fhir'
+    index = doc_type = 'fhir'
     limit = None
     logs = []
     for file_path in pathlib.Path(path).glob('*.ndjson'):
 
         write_bulk_http(elastic=elastic, index=index, doc_type=doc_type, limit=limit,
-                        generator=resource_generator(project_id, file_path), schema=None)
+                        generator=resource_generator(project_id, file_path))
 
-        logs.append(f"wrote {file_path} to {elastic_url}/{index}")
+        logs.append(f"wrote {file_path} to elasticsearch/{index}")
 
     return logs
 
@@ -55,9 +58,9 @@ def fhir_get(project_id, path, elastic_url) -> list[str]:
     assert program, "program is required"
     assert project, "project is required"
 
-    elastic = Elasticsearch([elastic_url], request_timeout=120)
+    elastic = Elasticsearch([elastic_url], request_timeout=120, max_retries=5)
 
-    index = doc_type = 'fhir'
+    index = 'fhir'
     logs = []
 
     emitters = {}
@@ -75,8 +78,19 @@ def fhir_get(project_id, path, elastic_url) -> list[str]:
 
     auth_resource_path = f"/programs/{program}/projects/{project}"
 
-    res = elastic.search(index=index, doc_type=doc_type, body={"query": {"match": {"auth_resource_path": auth_resource_path}}})
-    for _ in res['hits']['hits']:
+    for _ in elasticsearch.helpers.scan(
+        client=elastic,
+        query={
+          "query": {
+            "term": {
+              "auth_resource_path.keyword": {
+                "value": auth_resource_path
+              }
+            }
+          }
+        },
+        index=index
+    ):
         resource_type = _['_source']['resourceType']
         _file = _emitter(resource_type)
         del _['_source']['auth_resource_path']
@@ -87,6 +101,54 @@ def fhir_get(project_id, path, elastic_url) -> list[str]:
         file.close()
     for file in open_files:
         logs.append(f"wrote {file}")
+
+    return logs
+
+
+def fhir_delete(project_id, elastic_url) -> list[str]:
+    """Delete FHIR resources from FHIR store based on project_id."""
+    assert project_id.count('-') == 1, f"{project_id} should have a single '-' separating program and project"
+    program, project = project_id.split('-')
+    assert program, "program is required"
+    assert project, "project is required"
+
+    elastic = Elasticsearch([elastic_url], request_timeout=120, max_retries=5)
+
+    index = 'fhir'
+    logs = []
+
+    auth_resource_path = f"/programs/{program}/projects/{project}"
+
+    deleted_count = 0
+    actions = []
+
+    for _ in elasticsearch.helpers.scan(
+        client=elastic,
+        query={
+            "query": {
+                "term": {
+                    "auth_resource_path.keyword": {
+                        "value": auth_resource_path
+                    }
+                }
+            }
+        },
+        index=index
+    ):
+        actions.append({
+            "_op_type": "delete",
+            "_index": index,
+            "_id": _['_id']
+        })
+
+    if actions:
+        try:
+            elasticsearch.helpers.bulk(elastic, actions)
+            deleted_count += len(actions)
+        except OpenSearchException as e:
+            logs.append(f"Error deleting resources: {str(e)}")
+
+    logs.append(f"Deleted {deleted_count} resources for project {project_id}")
 
     return logs
 
@@ -113,14 +175,13 @@ def _fhir_put(project_id, output_format, path, elastic_url):
         json.dump(logs, sys.stdout, indent=2)
 
 
-
 @fhir_store.command(name='get')
 @click.option('--project_id', required=True, show_default=True,
               help="Gen3 program-project")
 @click.option('--format', 'output_format',
-             default='yaml',
-             show_default=True,
-             type=click.Choice(['yaml', 'json'], case_sensitive=False))
+              default='yaml',
+              show_default=True,
+              type=click.Choice(['yaml', 'json'], case_sensitive=False))
 @click.option('--elastic_url', default=DEFAULT_ELASTIC, show_default=True)
 @click.argument('path', default=None, required=True)
 def _fhir_get(project_id, output_format, path, elastic_url):
@@ -129,6 +190,23 @@ def _fhir_get(project_id, output_format, path, elastic_url):
     PATH: directory to write ndjson files
     """
     logs = fhir_get(project_id, path, elastic_url)
+    if output_format == 'yaml':
+        yaml.dump(logs, sys.stdout, default_flow_style=False)
+    else:
+        json.dump(logs, sys.stdout, indent=2)
+
+
+@fhir_store.command(name='delete')
+@click.option('--project_id', required=True, show_default=True,
+              help="Gen3 program-project")
+@click.option('--format', 'output_format',
+              default='yaml',
+              show_default=True,
+              type=click.Choice(['yaml', 'json'], case_sensitive=False))
+@click.option('--elastic_url', default=DEFAULT_ELASTIC, show_default=True)
+def _fhir_delete(project_id, output_format, elastic_url):
+    """Deletes all resources for project_id"""
+    logs = fhir_delete(project_id, elastic_url)
     if output_format == 'yaml':
         yaml.dump(logs, sys.stdout, default_flow_style=False)
     else:

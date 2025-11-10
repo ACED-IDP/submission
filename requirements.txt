@@ -25,10 +25,11 @@ joblib
 beautifulsoup4
 
 # postgres
-psycopg2-binary
+psycopg2-binary==2.9.7
 
-# AWS version of ES curl http://$ELASTICSEARCH_SERVICE_HOST:$ELASTICSEARCH_SERVICE_PORT
-elasticsearch<7.14.0
+# modern plug compatible with elasticsearch
+opensearch-py==2.4.2
+
 
 # gdc
 dictionaryutils

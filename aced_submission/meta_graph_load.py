@@ -124,7 +124,7 @@ def load_vertices(files, connection, dependency_order, project_id, mapping):
                     cursor.execute(
                         f"""
                         INSERT INTO {data_table_name}({', '.join(columns)})
-                        SELECT  node_id, _props::jsonb, acl, _sysan, created FROM tmp_{data_table_name} 
+                        SELECT  node_id, _props::jsonb, acl, _sysan, created FROM tmp_{data_table_name}
                         ON CONFLICT (node_id) DO UPDATE SET {update_set}
                         """
                     )
@@ -143,7 +143,6 @@ def load_edges(files, connection, dependency_order, mapping, project_node_id):
             continue
 
         with connection.cursor() as cursor:
-            print(path)
             with open(path) as f:
                 # copy a block of records into a file like stringIO buffer
                 record_count = 0
@@ -225,7 +224,7 @@ def load_edges(files, connection, dependency_order, mapping, project_node_id):
                         cursor.execute(
                             f"""
                             INSERT INTO "{table_name}" ({', '.join(columns)})
-                            SELECT  {', '.join(columns)} FROM "tmp_{table_name}" 
+                            SELECT  {', '.join(columns)} FROM "tmp_{table_name}"
                             ON CONFLICT (src_id, dst_id) DO UPDATE SET {update_set}
                             """
                         )
@@ -235,7 +234,7 @@ def load_edges(files, connection, dependency_order, mapping, project_node_id):
         connection.commit()
 
 
-def meta_upload(source_path, program, project, credentials_file, silent, dictionary_path, config_path,
+def meta_upload(source_path, program, project, silent, dictionary_path, config_path,
                 file_name_pattern='**/*.ndjson'):
     """Copy simplified json into Gen3."""
     assert pathlib.Path(source_path).is_dir(), f"{source_path} should be a directory"
@@ -325,13 +324,20 @@ def ensure_project(program, project) -> bool:
         program_node_id = _['node_id']
         logger.info(f"Program {program} exists: {program_node_id}")
 
-    cur.execute("select node_id, _props from \"node_project\";")
-    projects = cur.fetchall()
-    projects = [{'node_id': p[0], '_props': p[1]} for p in projects]
-    project_code = project
-    project_node_id = next(iter([p['node_id'] for p in projects if p['_props']['code'] == project_code]), None)
+    cur.execute("""
+        select node_id, _props->>'code' as code  from node_project where node_id in (select src_id
+        from
+        edge_projectmemberofprogram
+        where dst_id = (select node_id from node_program where _props->>'name' = %s)) and _props->>'code' = %s ;""",
+                (program, project,)
+                )
+    project_node_id = None
+    _ = cur.fetchone()
+    if _:
+        project_node_id, _ = _
+
     if not project_node_id:  # project does not exist
-        logger.info(f"Project {project_code} does not exist")
+        logger.info(f"Project {project} does not exist")
         project_node_id = str(uuid.uuid5(PROJECT_SEED, project))
         cur.execute(
             "INSERT INTO node_project(node_id, _props) VALUES (%s, %s) ON CONFLICT DO NOTHING",
@@ -349,3 +355,40 @@ def ensure_project(program, project) -> bool:
 
     project_id = f"{program}-{project}"
     logger.info(f"Program and project exist: {project_id} {project_node_id}")
+
+
+def empty_project(config_path, dictionary_path, program, project):
+    """Remove all nodes from metadata graph."""
+
+    config_path = pathlib.Path(config_path)
+    assert config_path.is_file()
+    with open(config_path) as fp:
+        gen3_config = yaml.load(fp, SafeLoader)
+
+    project_id = f"{program}-{project}"
+    logger.info(f"Emptying project {project_id}")
+    dependency_order = [c for c in gen3_config['dependency_order'] if not c.startswith('_')]
+    dependency_order = [c for c in dependency_order if c not in ['Program', 'Project']]
+
+    dictionary_dir = dictionary_path if 'http' not in dictionary_path else None
+    dictionary_url = dictionary_path if 'http' in dictionary_path else None
+    mappings = [mapping for mapping in _table_mappings(dictionary_dir, dictionary_url)]
+
+    conn = _connect_to_postgres()
+    for entity_name in dependency_order:
+        data_table_name = next(
+            iter(
+                set([m['dsttable'] for m in mappings if m['dstclass'].lower() == entity_name.lower()] +
+                    [m['srctable'] for m in mappings if m['srcclass'].lower() == entity_name.lower()])
+            ),
+            None)
+        if not data_table_name:
+            logger.warning(f"No mapping found for {entity_name} skipping")
+            continue
+        logger.info(f"Truncating {data_table_name} for {project_id}")
+        with conn.cursor() as cursor:
+            cursor.execute(f"DELETE FROM {data_table_name} WHERE _props->>'project_id' = %s", (project_id,))
+            conn.commit()
+
+    conn.commit()
+    logger.info(f"Done emptying project {project_id}")
